@@ -90,6 +90,10 @@ a {
   border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.section + .section {
+  margin-top: 3rem;
+}
+
 .hero {
   display: grid;
   gap: 2rem;
@@ -205,21 +209,52 @@ a {
 
 .about-grid {
   display: grid;
-  grid-template-columns: 1.3fr 0.9fr;
+  grid-template-columns: 1.2fr 0.8fr;
   gap: 2rem;
+  align-items: start;
 }
 
-.about-grid h3 {
+.about-copy {
+  padding-right: 1rem;
+}
+
+.about-copy h3 {
   margin-top: 0;
+  font-size: 1.35rem;
 }
 
-.about-grid ul {
-  padding-left: 1.2rem;
+.about-copy p {
+  color: #475569;
+  line-height: 1.85;
 }
 
-.stats-grid {
+.about-copy ul {
+  margin: 1.4rem 0 0;
+  padding-left: 1.25rem;
+  color: #475569;
+}
+
+.about-copy li {
+  margin-bottom: 0.8rem;
+}
+
+.about-cards {
   display: grid;
   gap: 1rem;
+}
+
+.stats-grid,
+.about-cards {
+  display: grid;
+  gap: 1rem;
+}
+
+.stat-card {
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+  border-radius: 28px;
+  padding: 1.6rem;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.09);
 }
 
 .stat-card {
