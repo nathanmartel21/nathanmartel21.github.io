@@ -9,42 +9,103 @@
   <body>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="index.html">Nathan Martel</a>
+        <a class="brand" href="#top">Nathan Martel</a>
         <nav class="site-nav">
-          <a href="index.html" class="active">Home</a>
-          <a href="pages/about.html">About</a>
+          <a href="#top" class="active">Home</a>
+          <a href="#about">About</a>
+          <a href="#contact">Contact</a>
           <a href="pages/blog.html">Blog</a>
-          <a href="pages/contact.html">Contact</a>
         </nav>
       </div>
     </header>
 
     <main class="container page-content">
-      <section class="section hero">
+      <section id="top" class="section hero">
         <div class="hero-text">
-          <p>Hello, I'm</p>
+          <p class="eyebrow">Hello, I’m</p>
           <h1>Nathan MARTEL</h1>
-          <p>
+          <p class="hero-copy">
             Middleware and automation systems engineer in the second year of engineering school at IMT Mines Alès.
           </p>
-          <p>
-            Passionate about cybersecurity, CTF challenge boxes, and automation. I develop CTF boxes and explore containerization security aspects.
+          <p class="hero-copy hero-highlight">
+            Passionate about cybersecurity, CTF challenge boxes, and automation. I build secure environments, develop CTF labs, and investigate containerization security.
           </p>
 
           <div class="button-row">
-            <a class="btn btn-primary" href="blog.html">View Blog</a>
-            <a class="btn btn-secondary" href="contact.html">Contact Me</a>
+            <a class="btn btn-primary" href="pages/blog.html">View Blog</a>
+            <a class="btn btn-secondary" href="#contact">Get in Touch</a>
           </div>
         </div>
 
-        <div class="hero-image">
-          <img src="images/pdp.jpg" alt="Photo of me" />
+        <div class="hero-visual">
+          <img src="images/profile.svg" alt="Profile illustration of Nathan Martel" />
+        </div>
+      </section>
+
+      <section id="about" class="section about-section">
+        <div class="section-header">
+          <span class="section-label">About</span>
+          <h2 class="section-title">A professional engineer combining middleware, automation and cybersecurity.</h2>
+          <p class="section-subtitle">
+            I design reliable automation systems, harden infrastructure, and deliver practical security solutions for modern operational environments.
+          </p>
+        </div>
+
+        <div class="about-grid">
+          <div>
+            <h3>What I do</h3>
+            <p>
+              I work at the intersection of middleware architecture and automation with a strong focus on security. My work includes building CTF machines, securing containerized pipelines, and optimizing system reliability.
+            </p>
+            <ul>
+              <li>Middleware design and integration</li>
+              <li>Automation for deployment and maintenance</li>
+              <li>Cybersecurity research and CTF development</li>
+              <li>Container security and infrastructure hardening</li>
+            </ul>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <p class="stat-value">2nd year</p>
+              <p class="stat-label">Engineering student at IMT Mines Alès</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-value">CTF</p>
+              <p class="stat-label">Challenge boxes and security labs</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-value">Containers</p>
+              <p class="stat-label">Secure deployment and analysis</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="contact" class="section contact-section">
+        <div class="contact-card">
+          <div>
+            <span class="section-label">Contact</span>
+            <h2 class="section-title">Let’s connect and collaborate.</h2>
+            <p class="section-subtitle">
+              Reach out for projects related to cybersecurity, middleware, automation, or container security.
+            </p>
+          </div>
+
+          <div class="contact-actions">
+            <a class="contact-link" href="https://linkedin.com/in/nathan-martel-a62a92290" target="_blank" rel="noreferrer">
+              <img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" />
+            </a>
+            <a class="contact-link" href="mailto:nathan.martel@mines-ales.org">
+              <img src="https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white" alt="Email" />
+            </a>
+          </div>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p>Personal website of Nathan Martel — middleware, automation and cybersecurity engineer.</p>
+      <p>Professional portfolio of Nathan Martel — middleware, automation and cybersecurity.</p>
     </footer>
   </body>
 </html>
