@@ -30,7 +30,7 @@
 
         <hr>
 
-        <h2>1. The concept: Poisoning the source</h2>
+        <h2>1. The concept: poisoning the source</h2>
         <p>
           "Layer poisoning" involves injecting malicious code into docker's storage snapshots (managed by <em>containerd</em>). It's not a docker bug per se, but a direct exploitation of its architecture. If an attacker manages to gain root access on the host, they can modify the "source" files that the container uses to start. The result? A persistent backdoor, invisible to standard scanning tools.
         </p>
