@@ -1,10 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>Mon site</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Home - Nathan Martel</title>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <h1>Bienvenue sur mon site !</h1>
-    <p>Mon premier site avec GitHub Pages 🎉</p>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="index.html">Nathan Martel</a>
+        <nav class="site-nav">
+          <a href="index.html" class="active">Home</a>
+          <a href="about.html">About</a>
+          <a href="blog.html">Blog</a>
+          <a href="contact.html">Contact</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container page-content">
+      <section class="section hero">
+        <div class="hero-text">
+          <p>Hello, I'm</p>
+          <h1>Nathan MARTEL</h1>
+          <p>
+            Middleware and automation systems engineer in the second year of engineering school at IMT Mines Alès.
+          </p>
+          <p>
+            Passionate about cybersecurity, CTF challenge boxes, and automation. I develop CTF boxes and explore containerization security aspects.
+          </p>
+
+          <div class="button-row">
+            <a class="btn btn-primary" href="blog.html">View Blog</a>
+            <a class="btn btn-secondary" href="contact.html">Contact Me</a>
+          </div>
+        </div>
+
+        <div class="hero-image">
+          <img src="https://placehold.co/640x640?text=Nathan+Martel&font=inter" alt="Photo of Nathan Martel" />
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Personal website of Nathan Martel — middleware, automation and cybersecurity engineer.</p>
+    </footer>
   </body>
 </html>
