@@ -207,16 +207,43 @@ a {
 }
 
 .hero-visual {
-  border-radius: 32px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 32px 90px rgba(15, 23, 42, 0.25);
+  position: relative;
+  width: min(420px, 100%);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  overflow: visible;
+  display: grid;
+  place-items: center;
+}
+
+.hero-visual::before {
+  content: "";
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  border: 2px solid rgba(56, 189, 248, 0.85);
+  box-shadow: 0 0 48px rgba(56, 189, 248, 0.35), 0 0 96px rgba(99, 102, 241, 0.12);
+  animation: spin-ring 10s linear infinite;
+  pointer-events: none;
+}
+
+.hero-visual::after {
+  content: "";
+  position: absolute;
+  inset: -30px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 45%);
+  filter: blur(18px);
+  pointer-events: none;
 }
 
 .hero-visual img {
   width: 100%;
-  height: auto;
-  display: block;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.32);
 }
 
 .section-header {
@@ -350,8 +377,9 @@ a {
   gap: 1.25rem;
   padding: 1.75rem;
   border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #ffffff;
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(8, 14, 29, 0.98) 100%);
+  box-shadow: 0 24px 80px rgba(99, 102, 241, 0.14);
 }
 
 .card-header {
@@ -366,11 +394,11 @@ a {
 .read-time {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #0f172a;
+  color: #c7d2fe;
 }
 
 .tag {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(99, 102, 241, 0.18);
   border-radius: 999px;
   padding: 0.5rem 0.85rem;
 }
@@ -382,7 +410,7 @@ a {
 
 .blog-card p {
   margin: 0;
-  color: #475569;
+  color: #cbd5e1;
 }
 
 .card-actions {
@@ -398,9 +426,19 @@ a {
 .site-footer {
   padding: 1.5rem 0;
   text-align: center;
-  color: #475569;
+  color: #cbd5e1;
   font-size: 0.95rem;
-  background: rgba(243, 244, 246, 0.7);
+  background: linear-gradient(180deg, rgba(7, 11, 22, 0.96), rgba(15, 23, 42, 0.98));
+  border-top: 1px solid rgba(99, 102, 241, 0.22);
+}
+
+@keyframes spin-ring {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 980px) {
