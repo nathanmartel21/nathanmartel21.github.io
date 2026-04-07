@@ -21,10 +21,11 @@
 
     <main class="container page-content">
       <article class="section">
-        <h1>Layer Poisoning, l'art de compromettre Docker par ses fondations</h1>
+        <h1>Layer poisoning, l'art de compromettre Docker par ses fondations</h1>
         
         <p class="post-intro">
-          On nous présente souvent les conteneurs Docker comme des environnements isolés et immuables. Pourtant, il existe une technique d'attaque appelée <strong>Layer Poisoning</strong>. Elle permet de compromettre un conteneur en modifiant silencieusement ses couches de système de fichiers directement sur l'hôte. Retour sur une manipulation qui casse le mythe de l'isolation parfaite.
+          On présente souvent les conteneurs Docker comme des environnements isolés et immuables. Pourtant, il existe une technique d'attaque appelée <strong>Layer Poisoning</strong>. 
+          Elle permet de compromettre un conteneur en modifiant silencieusement ses couches de système de fichiers directement sur l'hôte.
         </p>
 
         <hr>
@@ -34,7 +35,7 @@
           Le "Layer Poisoning" consiste à injecter du code malveillant dans les snapshots de stockage de Docker (gérés par <em>containerd</em>). Ce n'est pas un bug de Docker en soi, mais une exploitation directe de son architecture. Si un attaquant parvient à obtenir un accès root sur l'hôte, il peut modifier les fichiers "sources" que le conteneur utilise pour démarrer. Résultat ? Une backdoor persistante, invisible pour les outils de scan classiques.
         </p>
 
-        <h2>2. Les coulisses : Docker et OverlayFS</h2>
+        <h2>2. Docker et OverlayFS</h2>
         <p>
           Pour comprendre l'attaque, il faut comprendre <strong>OverlayFS</strong>. Docker empile les couches d'images pour former le système de fichiers final du conteneur. Ce mécanisme repose sur trois piliers :
         </p>
@@ -53,33 +54,35 @@
         <h3>Étape 1 : Préparation de l'écouteur</h3>
         <figure>
           <img src="images/a_lp_1.png" alt="Netcat listener setup" />
-          <figcaption>Côté attaquant : On prépare un listener Netcat sur le port 4444.</figcaption>
         </figure>
+
+        <p>Côté attaquant : On prépare un listener netcat sur le port 4444.</p>
 
         <h3>Étape 2 : Identification de la cible sur l'hôte</h3>
         <figure>
           <img src="images/v_lp_1.png" alt="Starting Alpine containers" />
         </figure>
         <p>
-          Nous lançons deux conteneurs Alpine classiques. Pour l'expérience, supposons que nous avons déjà un accès root sur l'hôte. Notre but est de trouver où ces conteneurs "vivent" physiquement.
+          On lance deux conteneurs Alpine classiques. Pour l'expérience, on suppose qu'on a déjà un accès root sur l'hôte. Notre but est de trouver où ces conteneurs "vivent" physiquement.
         </p>
         <figure>
           <img src="images/v_lp_2.png" alt="Inspecting container and overlayfs mount" />
-          <figcaption>On récupère l'ID du conteneur pour identifier le point de montage OverlayFS associé.</figcaption>
         </figure>
+
+        <p>Ici, on identifie le point de montage OverlayFS associé au conteneur.</p>
 
         <h3>Étape 3 : Injection du poison</h3>
         <figure>
           <img src="images/v_lp_3.png" alt="Exploring the snapshot" />
         </figure>
         <p>
-          Une fois dans le snapshot (ici le n°49), nous avons accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici que nous allons agir.
+          Une fois dans le snapshot (ici le n°49), on a accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici qu'on va agir.
         </p>
         <figure>
           <img src="images/v_lp_4.png" alt="Modifying ls binary" />
         </figure>
         <p>
-          Nous remplaçons le binaire <code>ls</code> par un script malveillant. Ce script fait deux choses :
+          On remplace le binaire <code>ls</code> par un script malveillant. Ce script fait deux choses :
           1. Il lance un <strong>Reverse Shell</strong> en arrière-plan vers l'IP de l'attaquant.
           2. Il appelle le vrai binaire <code>ls</code> pour que l'utilisateur ne remarque rien.
         </p>
@@ -88,28 +91,27 @@
         <h3>Étape 4 : Le "Pop" du Shell</h3>
         <figure>
           <img src="images/v_lp_5.png" alt="Victim executing ls" />
-          <figcaption>L'utilisateur tape 'ls /etc'. L'affichage est normal, l'illusion est parfaite.</figcaption>
         </figure>
+
+        <p>L'utilisateur exécute la commande <code>ls /etc</code>. L'affichage est normal, l'illusion est parfaite.</p>
+
         <figure>
           <img src="images/a_lp_2.png" alt="Attacker receiving access" />
-          <figcaption>Côté attaquant : La connexion arrive. Nous sommes root et pouvons lire les secrets (/etc/shadow, variables d'env).</figcaption>
         </figure>
 
-        <h2>4. Pourquoi cette attaque est redoutable ?</h2>
+        <p>Coté attaquant : La connexion arrive. On devient root et on peut lire les secrets (/etc/shadow, variables d'env, etc.).</p>
+
+        <h2>4. Au final, pourquoi c'est redoutable ?</h2>
         <p>
-          Ce qui rend le Layer Poisoning particulièrement vicieux, c'est sa discrétion. Si vous lancez un <code>docker diff</code>, Docker ne verra aucune modification. Pourquoi ? Parce que la modification a eu lieu dans le <strong>Lowerdir</strong> (l'image de base) et non dans la couche d'écriture du conteneur. De plus, tout nouveau conteneur créé à partir de cette image locale sera nativement infecté.
+          Ce qui rend le Layer Poisoning particulièrement vicieux, c'est sa discrétion. Si vous lancez un <code>docker diff</code>, Docker ne verra aucune modification parce que la modification a eu lieu dans le <strong>Lowerdir</strong> (l'image de base) et non dans la couche d'écriture du conteneur. 
+          En plus de ça, tout nouveau conteneur créé à partir de cette image locale sera nativement infecté.
         </p>
 
-        <h2>5. Conclusion et Défense</h2>
+        <h2>5. Conclusion</h2>
         <p>
-          Cette démonstration prouve qu'une isolation logicielle ne vaut rien si l'intégrité de l'hôte est compromise. Pour dormir tranquille, voici quelques pistes :
+          Cette démonstration prouve que si l'intégrité de l'hôte est compromise, c'est le conteneur qui est en danger. Selon moi, quelques pistes d'amélioration... 
+          Tout repose d'abord sur le PoLP afin de verrouiller l'accès aux dossiers critiques de containerd. Ensuite, j'ai vu qu'il existe l'option <code>--read-only</code> qui permet de neutraliser la persistance d'une intrusion. Enfin, plus poussé mais il y a aussi des outils de monitoring d'intégrité (FIM) qui peuvent être utilisés pour détecter en temps réel la moindre modification suspecte au sein de <code>/var/lib/docker</code>.
         </p>
-        <ul>
-          <li><strong>Principe du moindre privilège :</strong> Restreindre l'accès aux dossiers de <em>containerd/docker</em> sur l'hôte.</li>
-          <li><strong>Immuabilité :</strong> Utiliser des systèmes de fichiers en lecture seule (<code>--read-only</code>) pour limiter l'impact d'une intrusion.</li>
-          <li><strong>Vérification :</strong> Mettre en place des outils de monitoring d'intégrité (FIM) pour surveiller toute modification suspecte dans <code>/var/lib/docker</code>.</li>
-        </ul>
-        <p>Le Layer Poisoning nous rappelle que la sécurité d'un conteneur commence toujours par la sécurité de la machine qui l'héberge.</p>
 
       </article>
     </main>
