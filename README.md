@@ -1,15 +1,13 @@
 # nathanmartel21.github.io
 
-Personal website of Nathan Martel with four pages: Home, About, Blog, and Contact.
+Personal website of Nathan Martel with a modern one-page home experience and a separate blog page.
 
 Repository structure:
-- `index.html`: home page at root.
-- `pages/`: contains `about.html`, `blog.html`, and `contact.html`.
-- `styles/style.css`: shared styling for all pages.
-- `images/profile.svg`: profile image placeholder.
+- `index.html`: one-page portfolio with About and Contact sections on the same page.
+- `pages/`: contains `blog.html`, plus legacy `about.html` and `contact.html` pages.
+- `styles/style.css`: shared styling for the home page and blog.
+- `images/profile.svg`: professional profile illustration.
 
 Included pages:
-- `index.html`: home page with presentation and site links.
-- `pages/about.html`: about section with skills and interests.
-- `pages/blog.html`: article cards for technical topics.
-- `pages/contact.html`: LinkedIn and email contact links.
+- `index.html`: one-page portfolio with anchor navigation.
+- `pages/blog.html`: blog page with three featured articles.
