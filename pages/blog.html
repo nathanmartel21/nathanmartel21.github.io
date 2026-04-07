@@ -24,46 +24,12 @@
         <h1>Blog</h1>
         <p>Explore my articles, case studies, and technical notes on automation, cybersecurity, and middleware systems.</p>
 
-        <div class="cards-grid">
-          <article class="blog-card">
-            <div class="card-header">
-              <span class="tag">Docker</span>
-              <span class="read-time">5 min</span>
-            </div>
-            <h2>Securing Docker Containers</h2>
-            <p>Practical guide to hardening images and containers in a real-world deployment environment.</p>
-            <div class="card-actions">
-              <a class="btn btn-secondary" href="https://nathanmartel21.github.io" target="_blank" rel="noreferrer">View page</a>
-            </div>
-          </article>
-
-          <article class="blog-card">
-            <div class="card-header">
-              <span class="tag">Automation</span>
-              <span class="read-time">7 min</span>
-            </div>
-            <h2>Automation for CTF Labs</h2>
-            <p>How to automate the creation and deployment of CTF boxes for flexible training environments.</p>
-            <div class="card-actions">
-              <a class="btn btn-secondary" href="https://nathanmartel21.github.io" target="_blank" rel="noreferrer">View page</a>
-            </div>
-          </article>
-
-          <article class="blog-card">
-            <div class="card-header">
-              <span class="tag">Middleware</span>
-              <span class="read-time">6 min</span>
-            </div>
-            <h2>Monitoring Middleware Pipelines</h2>
-            <p>Monitoring middleware systems and automating alerts for reliable, resilient pipelines.</p>
-            <div class="card-actions">
-              <a class="btn btn-secondary" href="https://nathanmartel21.github.io" target="_blank" rel="noreferrer">View page</a>
-            </div>
-          </article>
+        <div class="cards-grid" id="blog-list">
+          <p class="loading-copy">Loading blog posts…</p>
         </div>
 
         <div class="show-more-row">
-          <a class="btn btn-primary" href="https://nathanmartel21.github.io" target="_blank" rel="noreferrer">Show More</a>
+          <a class="btn btn-primary" href="../index.html">Back to homepage</a>
         </div>
       </section>
     </main>
@@ -71,5 +37,40 @@
     <footer class="site-footer">
       <p>Blog page of Nathan Martel — cybersecurity and automation experience shared.</p>
     </footer>
+
+    <script>
+      async function loadBlogPosts() {
+        const container = document.getElementById('blog-list');
+        try {
+          const response = await fetch('blog-posts/posts.json');
+          const posts = await response.json();
+
+          container.innerHTML = '';
+          posts.forEach(post => {
+            const article = document.createElement('article');
+            article.className = 'blog-card';
+
+            article.innerHTML = `
+              <div class="card-header">
+                <span class="tag">${post.tag}</span>
+                <span class="read-time">${post.readTime}</span>
+              </div>
+              <h2>${post.title}</h2>
+              <p>${post.subtitle}</p>
+              <div class="card-actions">
+                <a class="btn btn-secondary" href="${post.href}">Read post</a>
+              </div>
+            `;
+
+            container.appendChild(article);
+          });
+        } catch (error) {
+          container.innerHTML = '<p class="loading-copy">Unable to load posts. Please refresh the page.</p>';
+          console.error('Error loading blog posts:', error);
+        }
+      }
+
+      loadBlogPosts();
+    </script>
   </body>
 </html>
