@@ -50,14 +50,34 @@
             const article = document.createElement('article');
             article.className = 'blog-card';
 
+            const tags = Array.isArray(post.tags)
+              ? post.tags
+              : typeof post.tags === 'string'
+              ? post.tags.split(',').map(tag => tag.trim())
+              : [];
+
+            const tagChips = tags.map(tag => `<span class="tag">${tag}</span>`).join('');
+
+            const formatDate = dateString => {
+              if (!dateString) return '';
+              const date = new Date(dateString);
+              if (Number.isNaN(date.getTime())) return dateString;
+              return date.toLocaleDateString('fr-FR', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              });
+            };
+
             article.innerHTML = `
-              <div class="card-header">
-                <span class="tag">${post.tag}</span>
-                <span class="read-time">${post.readTime}</span>
+              <div class="card-top">
+                <div class="tags">${tagChips}</div>
+                <span class="post-date">${formatDate(post.date)}</span>
               </div>
               <h2>${post.title}</h2>
               <p>${post.subtitle}</p>
-              <div class="card-actions">
+              <div class="card-footer">
+                <span class="read-time">${post.readTime}</span>
                 <a class="btn btn-secondary" href="${post.href}">Read post</a>
               </div>
             `;

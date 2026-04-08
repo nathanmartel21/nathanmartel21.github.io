@@ -382,25 +382,45 @@ a {
   box-shadow: 0 24px 80px rgba(99, 102, 241, 0.14);
 }
 
-.card-header {
+.card-top {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
+  align-items: flex-start;
 }
 
-.tag,
-.read-time {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #c7d2fe;
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: min(100%, 72%);
 }
 
 .tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #e0e7ff;
   background: rgba(99, 102, 241, 0.18);
   border-radius: 999px;
-  padding: 0.5rem 0.85rem;
+  padding: 0.45rem 0.85rem;
+}
+
+.post-date,
+.read-time {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: auto;
+  flex-wrap: wrap;
 }
 
 .blog-card h2 {

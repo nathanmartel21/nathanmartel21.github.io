@@ -2,7 +2,8 @@
   {
     "title": "Layer poisoning",
     "subtitle": "How a compromised host can poison container layers and gain access to the container",
-    "tag": "Container Security, Networking, Docker, OverlayFS",
+    "tags": ["Container Security", "Networking", "Docker", "OverlayFS"],
+    "date": "2026-04-08",
     "readTime": "5 min",
     "href": "blog-posts/layer-poisoning.html"
   }
