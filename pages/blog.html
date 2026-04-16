@@ -56,6 +56,8 @@
           const response = await fetch('blog-posts/posts.json', { cache: 'no-cache' });
           const posts = await response.json();
 
+          posts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
           container.innerHTML = '';
           posts.forEach(post => {
             const article = document.createElement('article');
