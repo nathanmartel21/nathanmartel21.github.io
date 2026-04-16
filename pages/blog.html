@@ -39,10 +39,21 @@
     </footer>
 
     <script>
+      const formatDate = dateString => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        if (Number.isNaN(date.getTime())) return dateString;
+        return date.toLocaleDateString('fr-FR', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+      };
+
       async function loadBlogPosts() {
         const container = document.getElementById('blog-list');
         try {
-          const response = await fetch('blog-posts/posts.json');
+          const response = await fetch('blog-posts/posts.json', { cache: 'no-cache' });
           const posts = await response.json();
 
           container.innerHTML = '';
@@ -58,16 +69,6 @@
 
             const tagChips = tags.map(tag => `<span class="tag">${tag}</span>`).join('');
 
-            const formatDate = dateString => {
-              if (!dateString) return '';
-              const date = new Date(dateString);
-              if (Number.isNaN(date.getTime())) return dateString;
-              return date.toLocaleDateString('fr-FR', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-              });
-            };
 
             article.innerHTML = `
               <div class="card-top">
