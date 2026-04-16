@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELF subversion and userland instrumentation</title>
+    <link rel="stylesheet" href="../../styles/style.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="../pages/blog.html">Nathan Martel</a>
+        <nav class="site-nav">
+          <a href="../../index.html">Home</a>
+          <a href="../../index.html#about">About</a>
+          <a href="../../index.html#contact">Contact</a>
+          <a href="../../pages/blog.html" class="active">Blog</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container page-content">
+      <article class="section">
+        <h1>ELF subversion and userland instrumentation: "hacking" the runtime</h1>
+        
+        <p class="post-intro">
+          Linux processes often seem impermeable. Yet powerful <strong>userland instrumentation</strong> techniques exist.
+          They let you observe, and even silently hijack, a running process without ever touching its source code or disk binaries.
+        </p>
+
+        <hr>
+
+        <h2>1. The concept: poisoning and LD_PRELOAD</h2>
+        <p>
+          The attack (or instrumentation, depending on your point of view) relies on how Linux loads dynamic executables (<strong>ELF</strong>). When a program calls a system function like <code>open()</code>, it depends on <em>libc</em>.
+        </p>
+        <p>
+          Using the <code>LD_PRELOAD</code> environment variable, an attacker can force the <em>dynamic loader</em> to load a custom shared library <strong>before</strong> the standard <em>libc</em>. The result? calls are hooked (<em>partial syscall tracing</em>), acting like a MITM inside the process memory space.
+        </p>
+
+        <h2>2. Preparing the ground with OverlayFS</h2>
+        <p>
+          To experiment cleanly without changing the host system, we use <strong>OverlayFS</strong>, the layered filesystem used by Docker.
+        </p>
+        
+        Let's prepare the environment. In an Ubuntu Docker container, we create a file structure that mimics OverlayFS.
+
+        <figure>
+          <img src="images/ri_prep.png" alt="Preparing the environment with apt and mkdir" />
+        </figure>
+
+        <p>
+          Here we isolate our executable (<code>/bin/ls</code>) in the <em>lowerdir</em>. OverlayFS will merge this view with our future malicious library in the <em>upperdir</em>. That creates a controlled environment ideal for the PoC.
+        </p>
+
+        <h2>3. Anatomy of the attack (PoC)</h2>
+        <p>Let's move to practice. The goal is to build a stealthy profiler that logs every file opened by the infected process.</p>
+        
+        <p>We take a hook implementation from the internet (there are many), written in C :</p>
+
+        <figure>
+          <img src="images/ri_code.png" alt="Creating the C file for the hook" />
+        </figure>
+
+        <p>We then compile this code into a shared library (<code>.so</code>) and inject it using <code>LD_PRELOAD</code>:</p>
+
+        <figure>
+          <img src="images/ri_compile.png" alt="Compilation and LD_PRELOAD export" />
+        </figure>
+
+        <p>To understand <code>LD_PRELOAD</code> quickly : it tells the dynamic loader to load one shared library before all others. By placing our malicious code there, we can intercept calls to selected functions (like <code>open()</code>) and run our own logic before forwarding to the original implementation.</p>
+
+        <p>Now run some completely normal-looking commands:</p>
+
+        <figure>
+          <img src="images/ri_exec.png" alt="Running normal commands" />
+        </figure>
+
+        <p>From the attacker's or analyst's perspective, the trap is set. The proof is in the log file generated quietly in the background:</p>
+        
+        <figure>
+          <img src="images/ri_log.png" alt="Checking interception logs" />
+        </figure>
+        
+        <p>The system has been subverted: every <code>open()</code> call is intercepted, recorded, then passed to the legitimate function. The illusion for the user is perfect.</p>
+
+        <h2>4. Why is this so dangerous?</h2>
+        <p>
+          What makes this technique (often called <strong>PLT poisoning</strong>) so dangerous is its disk invisibility. The original binary (<code>/bin/ls</code>) stays intact. Its hashes (MD5/SHA256) remain unchanged. The linux kernel is untouched. The alteration happens only at runtime, in volatile memory.
+        </p>
+
+        <h2>5. Conclusion</h2>
+        <p>
+          This demonstration shows the power of hijacking the dynamic linker. Attackers can use it to build stealthy <em>userland rootkits</em>.
+        </p>
+        <p>
+          Monitoring tools and <strong>EDR</strong> solutions have historically relied on the same interception concepts (now often via <em>eBPF</em>, which is more robust and kernel-side) to trace suspicious system calls and detect anomalies in real time.
+        </p>
+        
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <p>Blog page of Nathan Martel — cybersecurity and automation experience shared.</p>
+    </footer>
+  </body>
+</html>

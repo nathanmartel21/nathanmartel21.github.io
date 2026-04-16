@@ -6,5 +6,13 @@
     "date": "2026-04-08",
     "readTime": "5 min",
     "href": "blog-posts/layer-poisoning.html"
+  },
+  {
+    "title": "ELF Subversion and Userland Instrumentation",
+    "subtitle": "Hijacking the runtime with LD_PRELOAD, OverlayFS, and PLT poisoning",
+    "tags": ["Reverse Engineering", "EDR", "Linux Kernel", "ELF", "Syscalls"],
+    "date": "2026-04-16",
+    "readTime": "8 min",
+    "href": "blog-posts/runtime-instrumentation.html"
   }
 ]
