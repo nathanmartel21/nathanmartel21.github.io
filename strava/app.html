@@ -57,6 +57,51 @@
           </div>
         </section>
 
+        <!-- Training program -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Programme d’entraînement <span class="hint">généré selon ta forme actuelle</span></h2>
+          <div class="plan-card">
+            <div class="plan-controls">
+              <div class="plan-field">
+                <label>Séances / semaine</label>
+                <div class="stepper">
+                  <button type="button" id="plan-minus" aria-label="Moins">−</button>
+                  <span id="plan-sessions-val">4</span>
+                  <button type="button" id="plan-plus" aria-label="Plus">+</button>
+                </div>
+              </div>
+              <div class="plan-field">
+                <label for="plan-objective">Objectif prévu</label>
+                <select id="plan-objective"></select>
+              </div>
+              <div class="plan-field plan-summary">
+                <label>Volume planifié</label>
+                <span><strong id="plan-weekly-km">0</strong> km / semaine</span>
+              </div>
+            </div>
+            <div class="plan-sessions" id="plan-sessions"></div>
+          </div>
+        </section>
+
+        <!-- Fitness condition -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Condition physique <span class="hint">à quel point tu es en forme</span></h2>
+          <div class="condition-card" id="condition-card" data-tone="ok">
+            <div class="condition-gauge">
+              <span class="condition-score" id="cond-score">–</span>
+              <span class="condition-score-label">indice de forme</span>
+            </div>
+            <div class="condition-body">
+              <span class="condition-status" id="cond-label">…</span>
+              <p class="condition-advice" id="cond-advice"></p>
+              <div class="suggestion-meta">
+                <span class="pill"><span class="pill-label">Fraîcheur</span><span id="cond-form"></span></span>
+                <span class="pill"><span class="pill-label">Tendance 30 j</span><span id="cond-trend"></span></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- KPIs -->
         <section class="dash-section">
           <h2 class="dash-section-title">Vue d’ensemble <span class="hint">course à pied uniquement</span></h2>
@@ -68,23 +113,43 @@
           <h2 class="dash-section-title">Progression</h2>
           <div class="charts-grid">
             <div class="chart-card wide">
-              <h3>Volume hebdomadaire</h3>
-              <p class="chart-sub">Kilomètres par semaine — 26 dernières semaines</p>
+              <div class="chart-head">
+                <div>
+                  <h3>Volume hebdomadaire</h3>
+                  <p class="chart-sub">Kilomètres par semaine</p>
+                </div>
+                <div class="range-toggle" id="range-weekly"></div>
+              </div>
               <div class="chart-wrap"><canvas id="weekly-chart"></canvas></div>
             </div>
             <div class="chart-card">
-              <h3>Forme &amp; fatigue</h3>
-              <p class="chart-sub">Modèle CTL / ATL / TSB — 6 mois</p>
+              <div class="chart-head">
+                <div>
+                  <h3>Condition physique</h3>
+                  <p class="chart-sub">Forme (CTL) · Fatigue (ATL) · Fraîcheur (TSB)</p>
+                </div>
+                <div class="range-toggle" id="range-fitness"></div>
+              </div>
               <div class="chart-wrap"><canvas id="fitness-chart"></canvas></div>
             </div>
             <div class="chart-card">
-              <h3>Tendance d’allure</h3>
-              <p class="chart-sub">Allure moyenne par sortie + moyenne glissante (5 sorties)</p>
+              <div class="chart-head">
+                <div>
+                  <h3>Tendance d’allure</h3>
+                  <p class="chart-sub">Allure par sortie + moyenne glissante</p>
+                </div>
+                <div class="range-toggle" id="range-pace"></div>
+              </div>
               <div class="chart-wrap"><canvas id="pace-chart"></canvas></div>
             </div>
             <div class="chart-card wide">
-              <h3>Calendrier d’activité</h3>
-              <p class="chart-sub">12 derniers mois — plus c’est orange, plus tu as couru</p>
+              <div class="chart-head">
+                <div>
+                  <h3>Calendrier d’activité</h3>
+                  <p class="chart-sub">Plus c’est orange, plus tu as couru</p>
+                </div>
+                <div class="range-toggle" id="range-heatmap"></div>
+              </div>
               <div class="heatmap-scroll">
                 <div class="heatmap" id="heatmap"></div>
               </div>

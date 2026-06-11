@@ -23,7 +23,9 @@ const PKEY = {
   athlete: 'athlete',
   activities: 'activities',
   lastSync: 'last_sync',
-  weeklyGoal: 'weekly_goal'
+  weeklyGoal: 'weekly_goal',
+  planSessions: 'plan_sessions',
+  planObjective: 'plan_objective'
 };
 
 const DEMO_ID = 'demo';

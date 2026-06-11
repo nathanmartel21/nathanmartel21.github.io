@@ -202,8 +202,9 @@ function paceTrend(runs, days = 182, ref = new Date()) {
   return { points, rolling };
 }
 
-/* GitHub-style calendar: one cell per day for the last 52 weeks. */
-function calendarSeries(runs, ref = new Date()) {
+/* GitHub-style calendar: one cell per day over the last `days` days
+   (aligned to whole weeks). */
+function calendarSeries(runs, days = 364, ref = new Date()) {
   const dailyKm = new Map();
   runs.forEach(r => {
     const key = startOfDay(new Date(r.date)).getTime();
@@ -211,7 +212,7 @@ function calendarSeries(runs, ref = new Date()) {
   });
 
   const end = startOfDay(ref);
-  const start = startOfWeek(addDays(end, -363));
+  const start = startOfWeek(addDays(end, -(days - 1)));
   const cells = [];
   for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
     cells.push({ date: new Date(d), km: dailyKm.get(d.getTime()) || 0 });
@@ -309,6 +310,131 @@ function estimateZones(runs, ref = new Date()) {
     easy: threshold + 60,
     marathon: threshold + 25,
     interval: Math.max(threshold - 40, threshold * 0.85)
+  };
+}
+
+/* ---------------------------------------------------------------- */
+/* Fitness condition                                                 */
+/* ---------------------------------------------------------------- */
+
+/* Reads the current fitness model and turns it into a human status:
+   a 0-100 form index (fitness relative to the athlete's own peak over
+   the window) plus a qualitative label and advice. */
+function fitnessStatus(runs, ref = new Date()) {
+  const series = fitnessSeries(runs, 182, ref);
+  if (!series.length) {
+    return { score: 0, label: 'Pas de données', trend: 0, form: 0, advice: 'Importe ou enregistre quelques courses.' };
+  }
+
+  const last = series[series.length - 1];
+  const maxFitness = Math.max(...series.map(p => p.fitness), 0.001);
+  const score = Math.round((last.fitness / maxFitness) * 100);
+
+  const monthAgo = series[Math.max(0, series.length - 30)];
+  const trend = last.fitness - monthAgo.fitness;
+  const form = last.form; // TSB: positive = fresh, negative = loaded
+
+  let label, advice;
+  if (last.fitness < maxFitness * 0.35 && trend >= 0) {
+    label = 'En construction';
+    advice = 'Tu bâtis ta base. Enchaîne des sorties régulières en endurance.';
+  } else if (form > 8 && trend < -0.5) {
+    label = 'Désentraînement';
+    advice = 'Bien reposé mais la forme baisse : relance le volume pour ne pas perdre tes acquis.';
+  } else if (form > 5) {
+    label = 'Affûté';
+    advice = 'Frais et en forme — idéal pour une séance clé, un test ou une course.';
+  } else if (form < -12) {
+    label = 'Fatigue élevée';
+    advice = 'Grosse charge récente. Place une journée de récup ou de repos avant de repartir fort.';
+  } else if (trend > 0.5) {
+    label = 'En progression';
+    advice = 'Ta condition monte. Continue ainsi en surveillant la fatigue.';
+  } else {
+    label = 'En forme';
+    advice = 'Charge et fraîcheur équilibrées. Bon moment pour progresser.';
+  }
+
+  return { score, label, trend, form, fitness: last.fitness, advice };
+}
+
+/* ---------------------------------------------------------------- */
+/* Training program                                                  */
+/* ---------------------------------------------------------------- */
+
+const PLAN_OBJECTIVES = {
+  maintien: { label: 'Maintien de forme', longFactor: 1.0, volumeFactor: 1.0 },
+  progression: { label: 'Progression du volume', longFactor: 1.15, volumeFactor: 1.1 },
+  race5: { label: 'Préparer un 5 km', longFactor: 1.0, volumeFactor: 1.0, race: 5 },
+  race10: { label: 'Préparer un 10 km', longFactor: 1.1, volumeFactor: 1.05, race: 10 },
+  race21: { label: 'Préparer un semi-marathon', longFactor: 1.25, volumeFactor: 1.1, race: 21.1 },
+  race42: { label: 'Préparer un marathon', longFactor: 1.4, volumeFactor: 1.15, race: 42.2 }
+};
+
+const WEEK_TEMPLATES = {
+  1: ['Endurance'],
+  2: ['Endurance', 'Sortie longue'],
+  3: ['Endurance', 'Tempo', 'Sortie longue'],
+  4: ['Endurance', 'Fractionné', 'Endurance', 'Sortie longue'],
+  5: ['Endurance', 'Fractionné', 'Endurance', 'Tempo', 'Sortie longue'],
+  6: ['Récup', 'Fractionné', 'Endurance', 'Tempo', 'Endurance', 'Sortie longue'],
+  7: ['Récup', 'Fractionné', 'Endurance', 'Tempo', 'Endurance', 'Endurance', 'Sortie longue']
+};
+
+/* Builds a week of planned sessions sized to the athlete's recent volume,
+   the chosen number of sessions and the objective. */
+function buildTrainingPlan(runs, opts = {}) {
+  const ref = opts.ref || new Date();
+  const sessions = Math.max(1, Math.min(7, opts.sessionsPerWeek || 4));
+  const obj = PLAN_OBJECTIVES[opts.objective] || PLAN_OBJECTIVES.maintien;
+  const zones = estimateZones(runs, ref) || { easy: 360, threshold: 300, interval: 260 };
+  const stats = periodStats(runs, ref);
+
+  const avgDist = stats.last28.count
+    ? Math.max(stats.last28.km / stats.last28.count, 4)
+    : 6;
+  const last90 = runs.filter(r => inLastDays(r, 90, ref));
+  const longest90 = Math.max(...last90.map(r => r.distance / 1000), avgDist * 1.4);
+
+  let longTarget = Math.min(longest90 * obj.longFactor, avgDist * 2 + 4);
+  if (obj.race) longTarget = Math.min(Math.max(longTarget, obj.race * 0.7), obj.race * 1.05);
+
+  const roles = WEEK_TEMPLATES[sessions];
+  const vf = obj.volumeFactor;
+  const round = v => Math.max(3, Math.round(v));
+
+  const detail = role => {
+    switch (role) {
+      case 'Sortie longue':
+        return { dist: round(longTarget), pace: fmtPace(zones.easy + 10),
+          focus: 'Endurance, allure souple — on cherche la durée.' };
+      case 'Tempo':
+        return { dist: round(avgDist * vf), pace: `${fmtPace(zones.threshold)} sur les blocs`,
+          focus: '15 min échauffement + 2×10 min au seuil (récup 3 min) + retour au calme.' };
+      case 'Fractionné':
+        return { dist: round(avgDist * 0.9 * vf), pace: `${fmtPace(zones.interval)} sur les fractions`,
+          focus: '15 min échauffement + 8×400 m vite (récup 1 min) + retour au calme.' };
+      case 'Récup':
+        return { dist: round(avgDist * 0.6), pace: fmtPace(zones.easy + 30),
+          focus: 'Footing très léger de récupération active.' };
+      default:
+        return { dist: round(avgDist * vf), pace: fmtPace(zones.easy),
+          focus: 'Endurance fondamentale, allure conversationnelle.' };
+    }
+  };
+
+  const plan = roles.map(role => {
+    const d = detail(role);
+    return { type: role, distance: d.dist, pace: d.pace, focus: d.focus };
+  });
+
+  const weeklyKm = plan.reduce((s, p) => s + p.distance, 0);
+
+  return {
+    objectiveLabel: obj.label,
+    sessionsPerWeek: sessions,
+    weeklyKm,
+    sessions: plan
   };
 }
 

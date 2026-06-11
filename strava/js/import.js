@@ -50,9 +50,28 @@ function normHeader(h) {
 function numParse(s) {
   if (s == null) return NaN;
   let v = String(s).trim().replace(/\s/g, '');
-  if (v.includes(',') && !v.includes('.')) v = v.replace(',', '.');
+  if (v === '' || v === '--' || v === '-') return NaN;
+  if (v.includes(',') && v.includes('.')) {
+    v = v.replace(/,/g, ''); // 1,234.5 -> thousands separators
+  } else if (v.includes(',')) {
+    v = v.replace(',', '.'); // 10,5 -> decimal comma
+  }
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : NaN;
+}
+
+/* Parses a duration into seconds. Accepts plain seconds ("2700"),
+   "MM:SS" and "HH:MM:SS" (Garmin exports use the colon forms). */
+function parseDuration(s) {
+  if (s == null) return NaN;
+  const v = String(s).trim();
+  if (v === '' || v.startsWith('--')) return NaN;
+  if (v.includes(':')) {
+    const parts = v.split(':').map(p => parseFloat(p.replace(',', '.')));
+    if (parts.some(p => !Number.isFinite(p))) return NaN;
+    return parts.reduce((acc, p) => acc * 60 + p, 0);
+  }
+  return numParse(v);
 }
 
 const FR_MONTHS = {
@@ -102,17 +121,19 @@ function normType(t) {
   return t || 'Workout';
 }
 
+/* Synonyms cover both Strava's activities.csv and Garmin Connect's
+   activities export (EN + FR headers). */
 const COLUMN_SYNONYMS = {
   id: ['activity id', "id de l'activité", "identifiant de l'activité"],
-  name: ['activity name', "nom de l'activité"],
+  name: ['activity name', "nom de l'activité", 'title', 'titre'],
   type: ['activity type', "type d'activité"],
-  date: ['activity date', "date de l'activité"],
+  date: ['activity date', "date de l'activité", 'date'],
   distance: ['distance'],
-  movingTime: ['moving time', 'durée de déplacement', 'temps de déplacement', 'temps de mouvement'],
-  elapsedTime: ['elapsed time', 'durée', 'temps écoulé'],
-  elevation: ['elevation gain', 'dénivelé positif', "gain d'altitude", 'dénivelé'],
-  avgHr: ['average heart rate', 'fréquence cardiaque moyenne', 'fc moyenne'],
-  maxHr: ['max heart rate', 'fréquence cardiaque maximale', 'fc max']
+  movingTime: ['moving time', 'durée de déplacement', 'temps de déplacement', 'temps de mouvement', 'time', 'temps'],
+  elapsedTime: ['elapsed time', 'durée', 'temps écoulé', 'durée écoulée'],
+  elevation: ['elevation gain', 'dénivelé positif', "gain d'altitude", 'dénivelé', 'total ascent', 'ascension totale', 'dénivelé positif total'],
+  avgHr: ['average heart rate', 'fréquence cardiaque moyenne', 'fc moyenne', 'avg hr', 'fréq. cardiaque moyenne'],
+  maxHr: ['max heart rate', 'fréquence cardiaque maximale', 'fc max', 'max hr', 'fréq. cardiaque maximale']
 };
 
 function indicesFor(header, syns) {
@@ -122,13 +143,25 @@ function indicesFor(header, syns) {
 }
 
 /* Among candidate columns, pick the one whose values are plain numbers
-   (Strava repeats "Elapsed Time" as both a formatted string and seconds). */
+   (used for elevation). */
 function pickNumericIndex(indices, dataRows) {
   for (const idx of indices) {
     const sample = dataRows.slice(0, 40).map(r => r[idx]).filter(v => v != null && v !== '');
     if (!sample.length) continue;
     const numericRatio = sample.filter(v => !String(v).includes(':') && Number.isFinite(numParse(v))).length / sample.length;
     if (numericRatio > 0.8) return idx;
+  }
+  return indices.length ? indices[0] : -1;
+}
+
+/* Pick the time column whose values parse as durations — handles both
+   seconds (Strava) and HH:MM:SS (Garmin). */
+function pickTimeIndex(indices, dataRows) {
+  for (const idx of indices) {
+    const sample = dataRows.slice(0, 40).map(r => r[idx]).filter(v => v != null && v !== '' && v !== '--');
+    if (!sample.length) continue;
+    const ok = sample.filter(v => Number.isFinite(parseDuration(v)) && parseDuration(v) > 0).length / sample.length;
+    if (ok > 0.8) return idx;
   }
   return indices.length ? indices[0] : -1;
 }
@@ -172,8 +205,8 @@ function parseStravaExport(text) {
   const iType = col.type[0] ?? -1;
   const iDate = col.date[0];
   const dist = pickDistance(col.distance, data);
-  const iMoving = pickNumericIndex(col.movingTime, data);
-  const iElapsed = pickNumericIndex(col.elapsedTime, data);
+  const iMoving = pickTimeIndex(col.movingTime, data);
+  const iElapsed = pickTimeIndex(col.elapsedTime, data);
   const iElev = pickNumericIndex(col.elevation, data);
   const iAvgHr = col.avgHr[0] ?? -1;
   const iMaxHr = col.maxHr[0] ?? -1;
@@ -188,8 +221,8 @@ function parseStravaExport(text) {
     const distance = dist.idx >= 0 ? numParse(r[dist.idx]) * dist.scale : NaN;
     if (!date || !Number.isFinite(distance) || distance < 300) { skipped++; continue; }
 
-    const moving = numParse(get(r, iMoving));
-    const elapsed = numParse(get(r, iElapsed));
+    const moving = parseDuration(get(r, iMoving));
+    const elapsed = parseDuration(get(r, iElapsed));
     const movingTime = Number.isFinite(moving) ? moving : (Number.isFinite(elapsed) ? elapsed : 0);
     if (movingTime < 30) { skipped++; continue; }
 

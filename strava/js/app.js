@@ -27,6 +27,33 @@
   const GREEN = '#34d399';
   const YELLOW = '#fbbf24';
 
+  /* ---------------- Chart registry & range toggles ---------------- */
+
+  const charts = {};
+  const RANGES = [
+    { label: '1M', days: 31 },
+    { label: '3M', days: 92 },
+    { label: '6M', days: 183 },
+    { label: '1A', days: 365 }
+  ];
+
+  /* Fills a `.range-toggle` container with the 1M/3M/6M/1A buttons and
+     calls `onChange(days)` on click and once for the default. */
+  function setupRange(container, defaultDays, onChange) {
+    if (!container) return;
+    container.innerHTML = RANGES
+      .map(r => `<button type="button" data-days="${r.days}"${r.days === defaultDays ? ' class="active"' : ''}>${r.label}</button>`)
+      .join('');
+    container.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onChange(Number(btn.getAttribute('data-days')));
+      });
+    });
+    onChange(defaultDays);
+  }
+
   /* ---------------- UI helpers ---------------- */
 
   function showError(text) {
@@ -135,9 +162,11 @@
       kpiCard('Au total', stats.total);
   }
 
-  function renderWeeklyChart(runs) {
-    const weeks = weeklySeries(runs, 26);
-    new Chart($('weekly-chart'), {
+  function renderWeeklyChart(runs, days) {
+    const nWeeks = Math.max(4, Math.ceil(days / 7));
+    const weeks = weeklySeries(runs, nWeeks);
+    if (charts.weekly) charts.weekly.destroy();
+    charts.weekly = new Chart($('weekly-chart'), {
       type: 'bar',
       data: {
         labels: weeks.map(w => w.label),
@@ -167,12 +196,13 @@
     });
   }
 
-  function renderFitnessChart(runs) {
-    const series = fitnessSeries(runs, 182);
+  function renderFitnessChart(runs, days) {
+    const series = fitnessSeries(runs, days);
     const labels = series.map(p =>
       p.date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
     );
-    new Chart($('fitness-chart'), {
+    if (charts.fitness) charts.fitness.destroy();
+    charts.fitness = new Chart($('fitness-chart'), {
       type: 'line',
       data: {
         labels,
@@ -219,10 +249,11 @@
     });
   }
 
-  function renderPaceChart(runs) {
-    const { points, rolling } = paceTrend(runs, 182);
+  function renderPaceChart(runs, days) {
+    const { points, rolling } = paceTrend(runs, days);
     const fmt = d => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-    new Chart($('pace-chart'), {
+    if (charts.pace) charts.pace.destroy();
+    charts.pace = new Chart($('pace-chart'), {
       type: 'scatter',
       data: {
         datasets: [
@@ -284,8 +315,8 @@
     });
   }
 
-  function renderHeatmap(runs) {
-    const cells = calendarSeries(runs);
+  function renderHeatmap(runs, days) {
+    const cells = calendarSeries(runs, days);
     const container = $('heatmap');
     container.innerHTML = '';
     /* Pad so the first column starts on Monday. */
@@ -347,6 +378,88 @@
     update();
   }
 
+  function renderCondition(runs) {
+    const st = fitnessStatus(runs);
+    const card = $('condition-card');
+    $('cond-score').textContent = st.score;
+    $('cond-label').textContent = st.label;
+    $('cond-advice').textContent = st.advice;
+    $('cond-form').textContent = st.form >= 0
+      ? `+${st.form.toFixed(1)} (frais)`
+      : `${st.form.toFixed(1)} (chargé)`;
+    $('cond-trend').textContent = st.trend >= 0 ? '▲ en hausse' : '▼ en baisse';
+
+    /* Colour the card by broad status family. */
+    let tone = 'ok';
+    if (/fatigue|repos/i.test(st.label)) tone = 'warn';
+    else if (/affûté|progression/i.test(st.label)) tone = 'good';
+    else if (/construction|désentra/i.test(st.label)) tone = 'build';
+    card.setAttribute('data-tone', tone);
+  }
+
+  const PLAN_OBJECTIVE_OPTIONS = [
+    ['maintien', 'Maintien de forme'],
+    ['progression', 'Progression du volume'],
+    ['race5', 'Préparer un 5 km'],
+    ['race10', 'Préparer un 10 km'],
+    ['race21', 'Préparer un semi-marathon'],
+    ['race42', 'Préparer un marathon']
+  ];
+
+  function planSessionCard(s, index) {
+    return `
+      <div class="plan-session">
+        <div class="plan-session-head">
+          <span class="plan-session-num">J${index + 1}</span>
+          <span class="act-type-badge${/run|endurance|tempo|fractionn|longue|récup/i.test(s.type) ? '' : ' other'}">${s.type}</span>
+        </div>
+        <p class="plan-session-dist">${s.distance} km</p>
+        <p class="plan-session-pace">${s.pace}</p>
+        <p class="plan-session-focus">${s.focus}</p>
+      </div>`;
+  }
+
+  function defaultSessions(runs) {
+    const stats = periodStats(runs);
+    const perWeek = Math.round(stats.last28.count / 4);
+    return Math.max(2, Math.min(6, perWeek || 4));
+  }
+
+  function renderPlan(runs) {
+    const select = $('plan-objective');
+    select.innerHTML = PLAN_OBJECTIVE_OPTIONS
+      .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+
+    let sessions = Number(Profile.get(PKEY.planSessions)) || defaultSessions(runs);
+    sessions = Math.max(1, Math.min(7, sessions));
+    const objective = Profile.get(PKEY.planObjective) || 'maintien';
+    select.value = objective;
+    $('plan-sessions-val').textContent = sessions;
+
+    function update() {
+      const s = Number($('plan-sessions-val').textContent);
+      const o = select.value;
+      Profile.set(PKEY.planSessions, String(s));
+      Profile.set(PKEY.planObjective, o);
+      const plan = buildTrainingPlan(runs, { sessionsPerWeek: s, objective: o });
+      $('plan-weekly-km').textContent = plan.weeklyKm;
+      $('plan-sessions').innerHTML = plan.sessions.map(planSessionCard).join('');
+    }
+
+    $('plan-minus').onclick = () => {
+      const v = Math.max(1, Number($('plan-sessions-val').textContent) - 1);
+      $('plan-sessions-val').textContent = v;
+      update();
+    };
+    $('plan-plus').onclick = () => {
+      const v = Math.min(7, Number($('plan-sessions-val').textContent) + 1);
+      $('plan-sessions-val').textContent = v;
+      update();
+    };
+    select.onchange = update;
+    update();
+  }
+
   function renderActivities(activities) {
     const tbody = $('activities-body');
     const moreBtn = $('more-activities-btn');
@@ -384,11 +497,16 @@
     const runs = runsOnly(activities);
     renderSwitcher(athlete);
     renderSuggestion(runs);
+    renderPlan(runs);
     renderKpis(runs);
-    renderWeeklyChart(runs);
-    renderFitnessChart(runs);
-    renderPaceChart(runs);
-    renderHeatmap(runs);
+    renderCondition(runs);
+
+    /* Charts with their 1M/3M/6M/1A range toggles. */
+    setupRange($('range-weekly'), 183, days => renderWeeklyChart(runs, days));
+    setupRange($('range-fitness'), 183, days => renderFitnessChart(runs, days));
+    setupRange($('range-pace'), 183, days => renderPaceChart(runs, days));
+    setupRange($('range-heatmap'), 365, days => renderHeatmap(runs, days));
+
     renderRecords(runs);
     renderGoal(runs);
     renderActivities(activities);

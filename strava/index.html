@@ -134,15 +134,28 @@
           </div>
         </div>
 
-        <!-- State 5: import a Strava data export (no subscription) -->
+        <!-- State 5: import a Strava or Garmin data export (no subscription) -->
         <div id="import-view" hidden>
-          <h2 id="import-title">Importer un export Strava</h2>
-          <p>Gratuit, sans abonnement. Strava te laisse exporter tout ton historique : on s’en sert ici.</p>
-          <ol class="setup-steps">
-            <li>Sur Strava : <a href="https://www.strava.com/athlete/delete_your_account" target="_blank" rel="noreferrer">Paramètres → Mon compte → « Télécharger ou supprimer mon compte » → Demander mon archive</a>. Tu recevras un e-mail avec une archive ZIP (ça peut prendre quelques heures).</li>
-            <li>Décompresse l’archive et récupère le fichier <code>activities.csv</code> à la racine.</li>
-            <li>Nomme le profil et dépose le CSV ci-dessous. Pour « synchroniser » plus tard, redemande un export et réimporte : seules les nouvelles courses s’ajoutent.</li>
-          </ol>
+          <h2 id="import-title">Importer un export (Strava ou Garmin)</h2>
+          <p>Gratuit, sans abonnement. Dépose le fichier <code>.csv</code> d’export de tes activités — l’app détecte automatiquement le format Strava ou Garmin.</p>
+          <details class="import-help">
+            <summary>📦 Depuis <strong>Garmin Connect</strong></summary>
+            <ol class="setup-steps">
+              <li>Sur <a href="https://connect.garmin.com/modern/activities" target="_blank" rel="noreferrer">Garmin Connect → Activités</a>, fais défiler pour charger toutes les activités voulues (ou filtre par période).</li>
+              <li>Clique sur l’icône d’export <strong>« Exporter au format CSV »</strong> en haut à droite de la liste.</li>
+              <li>Nomme le profil et dépose le CSV ci-dessous.</li>
+            </ol>
+          </details>
+          <details class="import-help">
+            <summary>🟠 Depuis <strong>Strava</strong></summary>
+            <ol class="setup-steps">
+              <li><a href="https://www.strava.com/athlete/delete_your_account" target="_blank" rel="noreferrer">Paramètres → Mon compte → « Télécharger ou supprimer mon compte » → Demander mon archive</a>. Tu reçois un ZIP par e-mail (ça peut prendre quelques heures).</li>
+              <li>Décompresse et récupère <code>activities.csv</code> à la racine.</li>
+            </ol>
+          </details>
+          <p class="import-sync-note">
+            🔄 Pour « synchroniser » plus tard : réexporte et réimporte dans le même profil — seules les nouvelles courses s’ajoutent.
+          </p>
 
           <div class="field" id="import-name-field">
             <label for="import-name">NOM DU PROFIL</label>
