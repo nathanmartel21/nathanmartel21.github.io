@@ -3,55 +3,82 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Home - Nathan Martel</title>
+    <title>Nathan Martel — Middleware &amp; Automation Engineer</title>
+    <meta name="description" content="Nathan Martel — middleware and automation systems engineer. Cybersecurity, CTF boxes, container security, Ansible, OpenShift, Elastic stack." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles/style.css" />
   </head>
   <body>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="#top">Nathan Martel</a>
+        <a class="brand" href="#top">
+          <span class="prompt">nathan@martel:~$</span>
+          <span class="cursor"></span>
+        </a>
         <nav class="site-nav">
           <a href="#top" class="active">Home</a>
           <a href="#about">About</a>
-          <a href="#contact">Contact</a>
           <a href="pages/blog.html">Blog</a>
+          <a href="#contact">Contact</a>
+          <a href="strava/index.html" class="nav-strava">Strava</a>
         </nav>
       </div>
     </header>
 
     <main class="container page-content">
+      <!-- ============================ Hero ============================ -->
       <section id="top" class="section hero">
         <div class="hero-text">
-          <p class="eyebrow">Hello, I’m</p>
-          <h1>Nathan MARTEL</h1>
+          <p class="eyebrow">// Hello, I’m</p>
+          <h1>Nathan Martel</h1>
           <p class="hero-copy">
             Middleware and automation systems engineer in the second year of engineering school at IMT Mines Alès.
           </p>
           <p class="hero-copy hero-highlight">
-            Passionate about cybersecurity, CTF challenge boxes, and automation. I build secure environments, develop CTF labs, and investigate containerization security.
+            Passionate about <strong>cybersecurity</strong>, CTF challenge boxes, and automation.
+            I build secure environments, develop CTF labs, and investigate containerization security.
           </p>
 
           <div class="button-row">
-            <a class="btn btn-primary" href="pages/blog.html">View Blog</a>
-            <a class="btn btn-secondary" href="#contact">Get in Touch</a>
+            <a class="btn btn-primary" href="pages/blog.html">Read the blog</a>
+            <a class="btn btn-secondary" href="#contact">Get in touch</a>
           </div>
         </div>
 
         <div class="hero-visual">
-          <img src="images/pdp.jpg" alt="Profile illustration of Nathan Martel" />
+          <div class="terminal">
+            <div class="terminal-bar">
+              <span></span><span></span><span></span>
+              <span class="terminal-title">profile.yml</span>
+            </div>
+            <pre class="terminal-body"><span class="t-prompt">$</span> cat profile.yml
+<span class="t-key">name:</span> <span class="t-str">"Nathan Martel"</span>
+<span class="t-key">role:</span> <span class="t-str">"Middleware &amp; Automation Engineer"</span>
+<span class="t-key">company:</span> <span class="t-str">"Groupama Support &amp; Services"</span>
+<span class="t-key">school:</span> <span class="t-str">"IMT Mines Alès"</span>
+<span class="t-key">stack:</span> [ansible, openshift, elastic]
+<span class="t-key">interests:</span>
+  - cybersecurity
+  - ctf-boxes
+  - container-security  <span class="t-comment"># see the blog</span></pre>
+          </div>
         </div>
       </section>
 
-      <section id="about" class="section about-section">
-        <div class="section-header">
-          <span class="section-label">About</span>
-          <h2 class="section-title">Middleware and automation engineer at Groupama Support and Services</h2>
-          <p class="section-subtitle">
-            I automate infrastructure, manage openshift clusters, and deliver elastic stack projects for resilient operations.
-          </p>
-        </div>
+      <!-- ============================ About ============================ -->
+      <section id="about" class="section">
+        <span class="section-label">About</span>
+        <h2 class="section-title">Middleware and automation engineer at Groupama Support and Services</h2>
+        <p class="section-subtitle">
+          I automate infrastructure, manage openshift clusters, and deliver elastic stack projects for resilient operations.
+        </p>
 
         <div class="about-grid">
+          <div class="about-photo">
+            <img src="images/pdp.jpg" alt="Portrait of Nathan Martel" />
+          </div>
           <div class="about-copy">
             <h3>What I do</h3>
             <p>
@@ -66,25 +93,61 @@
               In my free time, I am a cybersecurity and container enthusiast. I develop and build CTF boxes to sharpen my skills.
             </p>
           </div>
+        </div>
 
-          <div class="about-cards">
-            <div class="stat-card">
-              <p class="stat-value">Ansible</p>
-              <p class="stat-label">Infrastructure automation and IaC</p>
-            </div>
-            <div class="stat-card">
-              <p class="stat-value">Openshift</p>
-              <p class="stat-label">Cluster deployment and lifecycle management</p>
-            </div>
-            <div class="stat-card">
-              <p class="stat-value">Elastic stack</p>
-              <p class="stat-label">Observability, IA and data pipeline projects</p>
-            </div>
+        <div class="skills-grid">
+          <div class="skill-card">
+            <span class="skill-index">01</span>
+            <p class="stat-value">Ansible</p>
+            <p class="stat-label">Infrastructure automation and IaC</p>
+          </div>
+          <div class="skill-card">
+            <span class="skill-index">02</span>
+            <p class="stat-value">Openshift</p>
+            <p class="stat-label">Cluster deployment and lifecycle management</p>
+          </div>
+          <div class="skill-card">
+            <span class="skill-index">03</span>
+            <p class="stat-value">Elastic stack</p>
+            <p class="stat-label">Observability, IA and data pipeline projects</p>
           </div>
         </div>
       </section>
 
-      <section id="contact" class="section contact-section">
+      <!-- ============================ Blog preview ============================ -->
+      <section id="writing" class="section">
+        <span class="section-label">Writing</span>
+        <h2 class="section-title">Latest from the blog</h2>
+        <p class="section-subtitle">
+          Articles, case studies, and technical notes on automation, cybersecurity, and middleware systems.
+        </p>
+
+        <div class="cards-grid" id="blog-preview">
+          <p class="loading-copy">Loading posts…</p>
+        </div>
+
+        <div class="show-more-row">
+          <a class="btn btn-secondary" href="pages/blog.html">All posts</a>
+        </div>
+      </section>
+
+      <!-- ============================ Strava teaser ============================ -->
+      <section id="running" class="section">
+        <div class="strava-teaser">
+          <div>
+            <span class="section-label">Running</span>
+            <h2>Strava Premium — my personal running dashboard</h2>
+            <p>
+              A custom-built training app on top of the Strava API: progression charts, personal
+              records, fitness &amp; fatigue tracking, and a daily run suggestion engine.
+            </p>
+          </div>
+          <a class="btn btn-strava" href="strava/index.html">Open the app</a>
+        </div>
+      </section>
+
+      <!-- ============================ Contact ============================ -->
+      <section id="contact" class="section">
         <div class="contact-card">
           <div>
             <span class="section-label">Contact</span>
@@ -96,10 +159,12 @@
 
           <div class="contact-actions">
             <a class="contact-link" href="https://linkedin.com/in/nathan-martel-a62a92290" target="_blank" rel="noreferrer">
-              <img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" />
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>
+              LinkedIn
             </a>
             <a class="contact-link" href="mailto:nathan.martel@mines-ales.org">
-              <img src="https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white" alt="Email" />
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4.24-8 5-8-5V6.5l8 5 8-5v1.74z"/></svg>
+              nathan.martel@mines-ales.org
             </a>
           </div>
         </div>
@@ -107,7 +172,41 @@
     </main>
 
     <footer class="site-footer">
-      <p>Professional portfolio of Nathan Martel</p>
+      <p>© Nathan Martel — built by hand, no framework.</p>
     </footer>
+
+    <script>
+      // Show the latest posts on the homepage from the same source as the blog page.
+      async function loadBlogPreview() {
+        const container = document.getElementById('blog-preview');
+        try {
+          const response = await fetch('pages/blog-posts/posts.json');
+          const posts = await response.json();
+          posts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+          container.innerHTML = '';
+          posts.slice(0, 3).forEach(post => {
+            const tags = Array.isArray(post.tags) ? post.tags : [];
+            const article = document.createElement('article');
+            article.className = 'blog-card';
+            article.innerHTML = `
+              <div class="card-top">
+                <div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+              </div>
+              <h2>${post.title}</h2>
+              <p>${post.subtitle}</p>
+              <div class="card-footer">
+                <span class="read-time">${post.readTime}</span>
+                <a class="read-link" href="pages/${post.href}">Read post</a>
+              </div>
+            `;
+            container.appendChild(article);
+          });
+        } catch (error) {
+          container.innerHTML = '<p class="loading-copy">Unable to load posts.</p>';
+        }
+      }
+      loadBlogPreview();
+    </script>
   </body>
 </html>

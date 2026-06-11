@@ -3,39 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Blog - Nathan Martel</title>
+    <title>Blog — Nathan Martel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../styles/style.css" />
   </head>
   <body>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="../index.html">Nathan Martel</a>
+        <a class="brand" href="../index.html">
+          <span class="prompt">nathan@martel:~$</span>
+          <span class="cursor"></span>
+        </a>
         <nav class="site-nav">
           <a href="../index.html">Home</a>
           <a href="../index.html#about">About</a>
-          <a href="../index.html#contact">Contact</a>
           <a href="blog.html" class="active">Blog</a>
+          <a href="../index.html#contact">Contact</a>
+          <a href="../strava/index.html" class="nav-strava">Strava</a>
         </nav>
       </div>
     </header>
 
     <main class="container page-content">
       <section class="section">
-        <h1>Blog</h1>
-        <p>Explore my articles, case studies, and technical notes on automation, cybersecurity, and middleware systems.</p>
+        <span class="section-label">Blog</span>
+        <h1 class="section-title">Articles &amp; technical notes</h1>
+        <p class="section-subtitle">
+          Explore my articles, case studies, and technical notes on automation, cybersecurity, and middleware systems.
+        </p>
 
         <div class="cards-grid" id="blog-list">
           <p class="loading-copy">Loading blog posts…</p>
         </div>
 
         <div class="show-more-row">
-          <a class="btn btn-primary" href="../index.html">Back to homepage</a>
+          <a class="btn btn-secondary" href="../index.html">Back to homepage</a>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p>Blog page of Nathan Martel — cybersecurity and automation experience shared.</p>
+      <p>Blog of Nathan Martel — cybersecurity and automation experience shared.</p>
     </footer>
 
     <script>
@@ -55,6 +65,7 @@
         try {
           const response = await fetch('blog-posts/posts.json', { cache: 'no-cache' });
           const posts = await response.json();
+          posts.sort((a, b) => new Date(b.date) - new Date(a.date));
 
           posts.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -81,7 +92,7 @@
               <p>${post.subtitle}</p>
               <div class="card-footer">
                 <span class="read-time">${post.readTime}</span>
-                <a class="btn btn-secondary" href="${post.href}">Read post</a>
+                <a class="read-link" href="${post.href}">Read post</a>
               </div>
             `;
 

