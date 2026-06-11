@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Strava Premium — Nathan Martel</title>
+    <meta name="description" content="Dashboard running personnel construit sur l'API Strava : graphiques de progression, records, suggestions d'entraînement." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/strava.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a class="app-brand" href="index.html">
+          <span class="bolt">⚡</span>
+          Strava
+          <span class="premium">Premium</span>
+        </a>
+        <div class="topbar-actions">
+          <a class="back-link" href="../index.html">&larr; retour au portfolio</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container auth-main">
+      <section class="auth-hero">
+        <p class="eyebrow">// mon dashboard running personnel</p>
+        <h1>Tes courses Strava, <span class="accent">en mieux</span>.</h1>
+        <p>
+          Une application personnelle construite sur l’API officielle Strava : toutes les
+          fonctionnalités premium, recodées à la main. Connecte ton compte et explore
+          tes données comme jamais.
+        </p>
+      </section>
+
+      <section class="features-grid">
+        <div class="feature-card">
+          <span class="icon">🎯</span>
+          <h3>Run du jour</h3>
+          <p>Un moteur de suggestion qui analyse ta charge récente et te propose la bonne séance : endurance, seuil, fractionné, sortie longue ou repos.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">📈</span>
+          <h3>Graphiques de progression</h3>
+          <p>Volume hebdomadaire, tendance d’allure, modèle forme / fatigue (CTL-ATL-TSB) sur 6 mois.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">🏆</span>
+          <h3>Records personnels</h3>
+          <p>Meilleures allures par distance, plus longue sortie, plus grosse semaine, plus gros dénivelé — calculés sur tout ton historique.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">🔥</span>
+          <h3>Heatmap &amp; objectifs</h3>
+          <p>Calendrier d’activité sur 12 mois façon GitHub et objectif kilométrique hebdomadaire avec suivi en temps réel.</p>
+        </div>
+      </section>
+
+      <section class="auth-panel" id="auth-panel">
+        <div class="status-msg" id="status-msg"></div>
+
+        <!-- State 1: API credentials not configured yet -->
+        <div id="setup-view" hidden>
+          <h2>Configuration (une seule fois)</h2>
+          <p>
+            L’app tourne entièrement dans ton navigateur : il lui faut ta propre clé API
+            Strava. Ça prend deux minutes&nbsp;:
+          </p>
+          <ol class="setup-steps">
+            <li>Va sur <a href="https://www.strava.com/settings/api" target="_blank" rel="noreferrer">strava.com/settings/api</a> (connecté avec ton compte <strong>nathan.martel@sfr.fr</strong>) et crée une application.</li>
+            <li>Renseigne <code>Site web</code> : <code>https://nathanmartel21.github.io</code> et <code>Domaine de rappel autorisé</code> : <code>nathanmartel21.github.io</code>.</li>
+            <li>Copie le <code>Client ID</code> et le <code>Client Secret</code> ci-dessous.</li>
+          </ol>
+
+          <div class="field">
+            <label for="client-id">CLIENT ID</label>
+            <input id="client-id" type="text" inputmode="numeric" placeholder="ex. 123456" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="client-secret">CLIENT SECRET</label>
+            <input id="client-secret" type="password" placeholder="ex. a1b2c3d4..." autocomplete="off" />
+          </div>
+
+          <div class="auth-actions">
+            <button class="btn btn-orange btn-big" id="save-connect-btn">Enregistrer &amp; se connecter avec Strava</button>
+          </div>
+
+          <p class="privacy-note">
+            🔒 Tes clés et tes données restent dans le <strong>localStorage de ce navigateur</strong> :
+            rien n’est envoyé ailleurs que vers l’API Strava. Ne partage pas ton Client Secret.
+          </p>
+
+          <div class="auth-divider">ou</div>
+          <div class="auth-actions">
+            <button class="btn btn-ghost" id="demo-btn-setup">Essayer en mode démo (données fictives)</button>
+          </div>
+        </div>
+
+        <!-- State 2: configured, ready to connect -->
+        <div id="connect-view" hidden>
+          <h2>Prêt à te connecter</h2>
+          <p>Clé API enregistrée. Autorise l’application à lire tes activités Strava.</p>
+          <div class="auth-actions">
+            <button class="btn btn-orange btn-big" id="connect-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+              Se connecter avec Strava
+            </button>
+            <button class="btn btn-ghost btn-sm" id="reset-config-btn">Modifier la clé API</button>
+          </div>
+          <div class="auth-divider">ou</div>
+          <div class="auth-actions">
+            <button class="btn btn-ghost" id="demo-btn-connect">Essayer en mode démo</button>
+          </div>
+        </div>
+
+        <!-- State 3: already connected -->
+        <div id="connected-view" hidden>
+          <h2>Compte connecté ✓</h2>
+          <p>Ton compte Strava est lié. Direction le dashboard.</p>
+          <div class="auth-actions">
+            <a class="btn btn-orange btn-big" href="app.html">Ouvrir mon dashboard</a>
+            <button class="btn btn-ghost btn-sm" id="logout-btn">Déconnexion</button>
+          </div>
+        </div>
+
+        <!-- State 4: exchanging the OAuth code -->
+        <div id="exchanging-view" hidden>
+          <h2>Connexion en cours…</h2>
+          <p>Échange du code d’autorisation avec Strava.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>App personnelle de Nathan Martel — propulsée par l’<a href="https://developers.strava.com/" target="_blank" rel="noreferrer">API Strava</a>. Non affiliée à Strava Inc.</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+      const views = ['setup-view', 'connect-view', 'connected-view', 'exchanging-view'];
+
+      function showView(id) {
+        views.forEach(v => { document.getElementById(v).hidden = v !== id; });
+      }
+
+      function showStatus(kind, text) {
+        const el = document.getElementById('status-msg');
+        el.className = `status-msg show ${kind}`;
+        el.textContent = text;
+      }
+
+      function startDemo() {
+        clearSession();
+        Store.set(STORE.demoMode, '1');
+        window.location.href = 'app.html';
+      }
+
+      async function handleOAuthCallback(code) {
+        showView('exchanging-view');
+        try {
+          await exchangeCode(code);
+          /* Clean the code from the URL so a refresh doesn't replay it. */
+          window.history.replaceState({}, '', window.location.pathname);
+          showStatus('success', 'Connexion réussie ! Redirection…');
+          setTimeout(() => { window.location.href = 'app.html'; }, 600);
+        } catch (err) {
+          showStatus('error', err.message);
+          showView(isConfigured() ? 'connect-view' : 'setup-view');
+        }
+      }
+
+      function init() {
+        const params = new URLSearchParams(window.location.search);
+
+        if (params.get('error')) {
+          showStatus('error', "Autorisation refusée côté Strava. Réessaie quand tu veux.");
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+
+        const code = params.get('code');
+        if (code && isConfigured()) {
+          handleOAuthCallback(code);
+          return;
+        }
+
+        if (isDemoMode()) {
+          window.location.href = 'app.html';
+          return;
+        }
+        if (isConnected()) {
+          showView('connected-view');
+        } else if (isConfigured()) {
+          showView('connect-view');
+        } else {
+          showView('setup-view');
+        }
+      }
+
+      document.getElementById('save-connect-btn').addEventListener('click', () => {
+        const id = document.getElementById('client-id').value.trim();
+        const secret = document.getElementById('client-secret').value.trim();
+        if (!id || !secret) {
+          showStatus('error', 'Renseigne le Client ID et le Client Secret.');
+          return;
+        }
+        Store.set(STORE.clientId, id);
+        Store.set(STORE.clientSecret, secret);
+        window.location.href = buildAuthorizeUrl();
+      });
+
+      document.getElementById('connect-btn').addEventListener('click', () => {
+        window.location.href = buildAuthorizeUrl();
+      });
+
+      document.getElementById('reset-config-btn').addEventListener('click', () => {
+        Store.remove(STORE.clientId);
+        Store.remove(STORE.clientSecret);
+        clearSession();
+        showView('setup-view');
+      });
+
+      document.getElementById('logout-btn').addEventListener('click', () => {
+        clearSession();
+        showView(isConfigured() ? 'connect-view' : 'setup-view');
+      });
+
+      document.getElementById('demo-btn-setup').addEventListener('click', startDemo);
+      document.getElementById('demo-btn-connect').addEventListener('click', startDemo);
+
+      init();
+    </script>
+  </body>
+</html>

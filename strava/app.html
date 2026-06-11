@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard — Strava Premium</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/strava.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a class="app-brand" href="index.html">
+          <span class="bolt">⚡</span>
+          Strava
+          <span class="premium">Premium</span>
+        </a>
+        <div class="topbar-actions">
+          <span class="demo-badge" id="demo-badge" hidden>MODE DÉMO</span>
+          <span class="athlete-chip" id="athlete-chip" hidden>
+            <img id="athlete-avatar" alt="" hidden />
+            <span id="athlete-name"></span>
+          </span>
+          <button class="btn btn-ghost btn-sm" id="refresh-btn">↻ Actualiser</button>
+          <button class="btn btn-ghost btn-sm" id="logout-btn">Déconnexion</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container dash-main">
+      <div class="loader show" id="loader">
+        <div class="spinner"></div>
+        <p id="loader-msg">Chargement des activités…</p>
+      </div>
+
+      <div class="status-msg" id="dash-status"></div>
+
+      <div class="dash-content" id="dash-content">
+        <!-- Run of the day -->
+        <section class="dash-section">
+          <div class="suggestion-card" id="suggestion-card">
+            <div>
+              <p class="suggestion-label">🎯 Run du jour — suggestion</p>
+              <h2 class="suggestion-title" id="sug-title"></h2>
+              <p class="suggestion-desc" id="sug-desc"></p>
+              <div class="suggestion-meta">
+                <span class="pill"><span class="pill-label">Distance</span><span id="sug-distance"></span></span>
+                <span class="pill"><span class="pill-label">Allure</span><span id="sug-pace"></span></span>
+                <span class="pill"><span class="pill-label">Pourquoi</span><span id="sug-reason"></span></span>
+              </div>
+            </div>
+            <div class="suggestion-type" id="sug-type"></div>
+          </div>
+        </section>
+
+        <!-- KPIs -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Vue d’ensemble <span class="hint">course à pied uniquement</span></h2>
+          <div class="kpi-grid" id="kpi-grid"></div>
+        </section>
+
+        <!-- Charts -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Progression</h2>
+          <div class="charts-grid">
+            <div class="chart-card wide">
+              <h3>Volume hebdomadaire</h3>
+              <p class="chart-sub">Kilomètres par semaine — 26 dernières semaines</p>
+              <div class="chart-wrap"><canvas id="weekly-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <h3>Forme &amp; fatigue</h3>
+              <p class="chart-sub">Modèle CTL / ATL / TSB — 6 mois</p>
+              <div class="chart-wrap"><canvas id="fitness-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <h3>Tendance d’allure</h3>
+              <p class="chart-sub">Allure moyenne par sortie + moyenne glissante (5 sorties)</p>
+              <div class="chart-wrap"><canvas id="pace-chart"></canvas></div>
+            </div>
+            <div class="chart-card wide">
+              <h3>Calendrier d’activité</h3>
+              <p class="chart-sub">12 derniers mois — plus c’est orange, plus tu as couru</p>
+              <div class="heatmap-scroll">
+                <div class="heatmap" id="heatmap"></div>
+              </div>
+              <div class="heatmap-legend">
+                moins
+                <span class="cell"></span>
+                <span class="cell l1"></span>
+                <span class="cell l2"></span>
+                <span class="cell l3"></span>
+                <span class="cell l4"></span>
+                plus
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Records -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Records personnels</h2>
+          <div class="records-grid" id="records-grid"></div>
+        </section>
+
+        <!-- Weekly goal -->
+        <section class="dash-section">
+          <div class="goal-card">
+            <div class="goal-head">
+              <h3>🎯 Objectif hebdomadaire</h3>
+              <div class="goal-edit">
+                <input id="goal-input" type="number" min="1" max="300" step="1" />
+                <span>km / semaine</span>
+              </div>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="goal-fill" style="width: 0%"></div>
+            </div>
+            <p class="goal-status" id="goal-status"></p>
+          </div>
+        </section>
+
+        <!-- Activities -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Dernières activités</h2>
+          <div class="activities-table-wrap">
+            <table class="activities-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Activité</th>
+                  <th>Type</th>
+                  <th>Distance</th>
+                  <th>Durée</th>
+                  <th>Allure</th>
+                  <th>D+</th>
+                  <th>FC moy.</th>
+                </tr>
+              </thead>
+              <tbody id="activities-body"></tbody>
+            </table>
+          </div>
+          <div style="display:flex; justify-content:center; margin-top:1.25rem;">
+            <button class="btn btn-ghost btn-sm" id="more-activities-btn" hidden>Afficher plus</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <p>App personnelle de Nathan Martel — données via l’API Strava, stockées uniquement dans ce navigateur.</p>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/analysis.js"></script>
+    <script src="js/demo.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
