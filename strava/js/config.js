@@ -92,16 +92,27 @@ function isActiveDemo() {
   return getActiveId() === DEMO_ID;
 }
 
-/* True when the active profile can show a dashboard (demo, or has tokens). */
+/* True when the active profile can show a dashboard (demo, has imported
+   activities, or has Strava tokens). */
 function activeHasSession() {
   const id = getActiveId();
   if (!id) return false;
   if (id === DEMO_ID) return true;
+  const profile = getProfile(id);
+  if (profile && profile.source === 'import') {
+    const acts = Profile.getJSON(PKEY.activities, id);
+    return Boolean(acts && acts.length);
+  }
   return Boolean(Profile.get(PKEY.refreshToken, id));
 }
 
+function isActiveImport() {
+  const profile = getActiveProfile();
+  return Boolean(profile && profile.source === 'import');
+}
+
 function ensureDemoProfile() {
-  upsertProfile({ id: DEMO_ID, name: 'Nathan (démo)', avatar: null, demo: true });
+  upsertProfile({ id: DEMO_ID, name: 'Nathan (démo)', avatar: null, demo: true, source: 'demo' });
   setActiveId(DEMO_ID);
 }
 

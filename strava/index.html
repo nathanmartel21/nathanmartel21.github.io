@@ -92,8 +92,9 @@
             rien n’est envoyé ailleurs que vers l’API Strava. Ne partage pas ton Client Secret.
           </p>
 
-          <div class="auth-divider">ou</div>
+          <div class="auth-divider">ou, sans abonnement</div>
           <div class="auth-actions">
+            <button class="btn btn-orange" id="import-btn-setup">📁 Importer un export Strava (gratuit)</button>
             <button class="btn btn-ghost" id="demo-btn-setup">Essayer en mode démo (données fictives)</button>
           </div>
         </div>
@@ -128,7 +129,35 @@
           <div class="profiles-list" id="profiles-list"></div>
           <div class="auth-actions">
             <a class="btn btn-orange btn-big" href="app.html">Ouvrir le dashboard</a>
-            <button class="btn btn-ghost" id="add-athlete-btn">+ Connecter un autre athlète</button>
+            <button class="btn btn-ghost" id="import-btn-connected">📁 Importer un export (nouvel athlète)</button>
+            <button class="btn btn-ghost btn-sm" id="add-athlete-btn">Connecter via l’API (abonnés)</button>
+          </div>
+        </div>
+
+        <!-- State 5: import a Strava data export (no subscription) -->
+        <div id="import-view" hidden>
+          <h2 id="import-title">Importer un export Strava</h2>
+          <p>Gratuit, sans abonnement. Strava te laisse exporter tout ton historique : on s’en sert ici.</p>
+          <ol class="setup-steps">
+            <li>Sur Strava : <a href="https://www.strava.com/athlete/delete_your_account" target="_blank" rel="noreferrer">Paramètres → Mon compte → « Télécharger ou supprimer mon compte » → Demander mon archive</a>. Tu recevras un e-mail avec une archive ZIP (ça peut prendre quelques heures).</li>
+            <li>Décompresse l’archive et récupère le fichier <code>activities.csv</code> à la racine.</li>
+            <li>Nomme le profil et dépose le CSV ci-dessous. Pour « synchroniser » plus tard, redemande un export et réimporte : seules les nouvelles courses s’ajoutent.</li>
+          </ol>
+
+          <div class="field" id="import-name-field">
+            <label for="import-name">NOM DU PROFIL</label>
+            <input id="import-name" type="text" placeholder="ex. Nathan, Lucas…" autocomplete="off" />
+          </div>
+
+          <label class="dropzone" id="dropzone">
+            <input id="csv-file" type="file" accept=".csv,text/csv" hidden />
+            <span class="dropzone-icon">📄</span>
+            <span id="dropzone-label">Clique ou dépose <code>activities.csv</code> ici</span>
+          </label>
+
+          <div class="auth-actions">
+            <button class="btn btn-orange btn-big" id="import-save-btn" disabled>Importer</button>
+            <button class="btn btn-ghost btn-sm" id="import-cancel-btn">Annuler</button>
           </div>
         </div>
 
@@ -146,10 +175,15 @@
 
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/import.js"></script>
     <script>
-      const views = ['setup-view', 'connect-view', 'connected-view', 'exchanging-view'];
+      const views = ['setup-view', 'connect-view', 'connected-view', 'exchanging-view', 'import-view'];
       /* True when the connect screen is opened to add an extra athlete. */
       let addingAthlete = false;
+      /* Parsed activities staged for import, and the target profile id
+         (set when re-importing into an existing profile). */
+      let stagedActivities = null;
+      let importTargetId = null;
 
       function showView(id) {
         views.forEach(v => { document.getElementById(v).hidden = v !== id; });
@@ -223,6 +257,74 @@
         }
       }
 
+      /* ---------------- Import flow ---------------- */
+
+      function slugify(s) {
+        return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'athlete';
+      }
+
+      function openImportView(profileId) {
+        stagedActivities = null;
+        importTargetId = profileId || null;
+        const nameField = document.getElementById('import-name-field');
+        const nameInput = document.getElementById('import-name');
+        const existing = profileId ? getProfile(profileId) : null;
+
+        document.getElementById('import-title').textContent = existing
+          ? `Mettre à jour « ${existing.name} »`
+          : 'Importer un export Strava';
+        nameField.hidden = Boolean(existing);
+        if (!existing) nameInput.value = '';
+
+        document.getElementById('dropzone-label').innerHTML =
+          'Clique ou dépose <code>activities.csv</code> ici';
+        document.getElementById('dropzone').classList.remove('ready', 'error');
+        document.getElementById('import-save-btn').disabled = true;
+        showView('import-view');
+      }
+
+      function handleCsvFile(file) {
+        const dropzone = document.getElementById('dropzone');
+        const label = document.getElementById('dropzone-label');
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const { activities, skipped } = parseStravaExport(reader.result);
+            stagedActivities = activities;
+            dropzone.classList.add('ready');
+            dropzone.classList.remove('error');
+            label.innerHTML = `✅ <strong>${activities.length}</strong> activités lues` +
+              (skipped ? ` <span class="muted">(${skipped} ignorées)</span>` : '');
+            document.getElementById('import-save-btn').disabled = false;
+          } catch (err) {
+            stagedActivities = null;
+            dropzone.classList.add('error');
+            dropzone.classList.remove('ready');
+            label.textContent = '❌ ' + err.message;
+            document.getElementById('import-save-btn').disabled = true;
+          }
+        };
+        reader.onerror = () => {
+          label.textContent = '❌ Impossible de lire le fichier.';
+        };
+        reader.readAsText(file);
+      }
+
+      function saveImport() {
+        if (!stagedActivities) return;
+        let id = importTargetId;
+        if (!id) {
+          const name = document.getElementById('import-name').value.trim();
+          if (!name) { showStatus('error', 'Donne un nom au profil.'); return; }
+          id = `imp_${slugify(name)}_${Date.now().toString(36)}`;
+          upsertProfile({ id, name, avatar: null, source: 'import' });
+        }
+        mergeImportedActivities(id, stagedActivities);
+        setActiveId(id);
+        window.location.href = 'app.html';
+      }
+
       /* Decides which screen to show based on current state. */
       function route() {
         if (!isConfigured()) { showView('setup-view'); return; }
@@ -251,6 +353,13 @@
         if (params.get('add') === '1' && isConfigured()) {
           window.history.replaceState({}, '', window.location.pathname);
           showConnectView(true);
+          return;
+        }
+
+        const importId = params.get('import');
+        if (importId) {
+          window.history.replaceState({}, '', window.location.pathname);
+          openImportView(getProfile(importId) ? importId : null);
           return;
         }
 
@@ -285,6 +394,31 @@
 
       document.getElementById('demo-btn-setup').addEventListener('click', startDemo);
       document.getElementById('demo-btn-connect').addEventListener('click', startDemo);
+
+      /* Import entry points */
+      document.getElementById('import-btn-setup').addEventListener('click', () => openImportView(null));
+      document.getElementById('import-btn-connected').addEventListener('click', () => openImportView(null));
+      document.getElementById('import-cancel-btn').addEventListener('click', route);
+      document.getElementById('import-save-btn').addEventListener('click', saveImport);
+
+      const csvInput = document.getElementById('csv-file');
+      csvInput.addEventListener('change', () => {
+        if (csvInput.files && csvInput.files[0]) handleCsvFile(csvInput.files[0]);
+      });
+
+      const dropzone = document.getElementById('dropzone');
+      ['dragover', 'dragenter'].forEach(evt =>
+        dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('dragging'); })
+      );
+      ['dragleave', 'dragend'].forEach(evt =>
+        dropzone.addEventListener(evt, () => dropzone.classList.remove('dragging'))
+      );
+      dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzone.classList.remove('dragging');
+        const file = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) handleCsvFile(file);
+      });
 
       init();
     </script>

@@ -48,6 +48,14 @@
       return { athlete: demo.athlete, activities: demo.activities };
     }
 
+    if (isActiveImport()) {
+      const profile = getActiveProfile();
+      return {
+        athlete: { firstname: profile.name || 'Athlète', lastname: '', profile_medium: profile.avatar },
+        activities: getCachedActivities() || []
+      };
+    }
+
     let athlete = getCachedAthlete();
     if (!athlete || forceSync) {
       athlete = await fetchAthlete();
@@ -66,6 +74,10 @@
 
   function renderSwitcher(athlete) {
     if (isActiveDemo()) $('demo-badge').hidden = false;
+    if (isActiveImport()) {
+      $('refresh-btn').textContent = '↻ Mettre à jour';
+      $('refresh-btn').title = 'Réimporter un export Strava plus récent';
+    }
 
     const select = $('profile-select');
     const profiles = getProfiles();
@@ -397,6 +409,10 @@
   $('refresh-btn').addEventListener('click', async () => {
     if (isActiveDemo()) {
       window.location.reload();
+      return;
+    }
+    if (isActiveImport()) {
+      window.location.href = 'index.html?import=' + encodeURIComponent(getActiveId());
       return;
     }
     const btn = $('refresh-btn');

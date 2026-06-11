@@ -526,6 +526,52 @@ img { max-width: 100%; display: block; }
 
 .profile-remove:hover { color: var(--red); border-color: var(--red); }
 
+/* Import dropzone */
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 2rem 1.25rem;
+  margin-bottom: 1.4rem;
+  border: 2px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--bg-raised);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropzone:hover,
+.dropzone.dragging {
+  border-color: var(--orange);
+  background: var(--orange-soft);
+}
+
+.dropzone.ready { border-color: var(--green); border-style: solid; }
+.dropzone.error { border-color: var(--red); border-style: solid; }
+
+.dropzone .dropzone-icon { font-size: 1.8rem; }
+
+.dropzone #dropzone-label {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+}
+
+.dropzone code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.1em 0.4em;
+  color: var(--yellow);
+}
+
+.dropzone .muted { color: var(--text-faint); }
+
 /* ------------------------------------------------------------------
    Dashboard
    ------------------------------------------------------------------ */
