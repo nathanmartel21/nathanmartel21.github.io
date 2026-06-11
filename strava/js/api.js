@@ -39,7 +39,14 @@ function slimActivity(act) {
     max_speed: act.max_speed,
     avg_hr: act.average_heartrate || null,
     max_hr: act.max_heartrate || null,
+    cadence: act.average_cadence ? Math.round(act.average_cadence * 2) : null,
+    calories: act.calories || null,
     effort: act.suffer_score || null,
+    gap_speed: null,
+    avg_grade: null,
+    steps: null,
+    temp: act.average_temp != null ? act.average_temp : null,
+    elev_loss: null,
     kudos: act.kudos_count || 0
   };
 }

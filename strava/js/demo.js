@@ -84,7 +84,15 @@ function demoData() {
         max_speed: (distance / movingTime) * (1.2 + rand() * 0.3),
         avg_hr: Math.round(138 + rand() * 25 + (kind === 'easy' || kind === 'long' ? 0 : 14)),
         max_hr: Math.round(168 + rand() * 22),
+        /* Cadence rises with progression and with intensity. */
+        cadence: Math.round(168 + progress * 8 + (kind === 'easy' || kind === 'long' ? 0 : 6) + rand() * 4),
+        calories: Math.round(km * (62 + rand() * 12)),
         effort: Math.round(km * (3 + rand() * 4)),
+        gap_speed: (distance / movingTime) * (1 + elev / Math.max(distance, 1) * 6),
+        avg_grade: Math.round((rand() * 2 - 0.5) * 10) / 10,
+        steps: Math.round(km * 1450 + rand() * 200),
+        temp: Math.round(8 + rand() * 18),
+        elev_loss: Math.round(elev * (0.85 + rand() * 0.3)),
         kudos: Math.floor(rand() * 14)
       });
     }

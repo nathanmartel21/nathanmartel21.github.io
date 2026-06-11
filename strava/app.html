@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/strava.css" />
+    <link rel="stylesheet" href="css/strava.css?v=5" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -63,6 +63,25 @@
           <div class="plan-card">
             <div class="plan-controls">
               <div class="plan-field">
+                <label for="plan-objective">Objectif</label>
+                <select id="plan-objective"></select>
+              </div>
+              <div class="plan-field" id="plan-customkm-field" hidden>
+                <label for="plan-race-km">Distance (km)</label>
+                <input id="plan-race-km" type="number" min="1" max="200" step="0.1" placeholder="ex. 15" />
+              </div>
+              <div class="plan-field" id="plan-time-field" hidden>
+                <label for="plan-target-time">Temps visé</label>
+                <input id="plan-target-time" type="text" inputmode="numeric" placeholder="hh:mm:ss" />
+              </div>
+              <div class="plan-field" id="plan-weeks-field" hidden>
+                <label for="plan-weeks">Course dans</label>
+                <div class="weeks-input">
+                  <input id="plan-weeks" type="number" min="1" max="52" step="1" placeholder="8" />
+                  <span>sem.</span>
+                </div>
+              </div>
+              <div class="plan-field">
                 <label>Séances / semaine</label>
                 <div class="stepper">
                   <button type="button" id="plan-minus" aria-label="Moins">−</button>
@@ -70,15 +89,20 @@
                   <button type="button" id="plan-plus" aria-label="Plus">+</button>
                 </div>
               </div>
-              <div class="plan-field">
-                <label for="plan-objective">Objectif prévu</label>
-                <select id="plan-objective"></select>
+            </div>
+
+            <div class="plan-race-summary" id="plan-race-summary" hidden>
+              <div class="plan-pace-box">
+                <span class="plan-pace-label">Allure cible</span>
+                <span class="plan-pace-value" id="plan-race-pace">–</span>
               </div>
-              <div class="plan-field plan-summary">
-                <label>Volume planifié</label>
-                <span><strong id="plan-weekly-km">0</strong> km / semaine</span>
+              <div class="plan-feasibility" id="plan-feasibility" data-tone="good">
+                <span class="plan-feas-label" id="plan-feas-label">–</span>
+                <span class="plan-feas-detail" id="plan-feas-detail"></span>
               </div>
             </div>
+
+            <p class="plan-volume-note"><strong id="plan-weekly-km">0</strong> km planifiés / semaine</p>
             <div class="plan-sessions" id="plan-sessions"></div>
           </div>
         </section>
@@ -166,6 +190,83 @@
           </div>
         </section>
 
+        <!-- Advanced charts -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Analyse détaillée <span class="hint">tirée de toutes les données de l’export</span></h2>
+          <div class="charts-grid">
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Zones d’allure</h3><p class="chart-sub">Temps passé par intensité</p></div>
+                <div class="range-toggle" id="range-zones"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="zones-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Répartition multisport</h3><p class="chart-sub">Temps par sport</p></div>
+                <div class="range-toggle" id="range-sport"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="sport-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Efficience aérobie</h3><p class="chart-sub">Mètres parcourus par battement (↑ = progrès)</p></div>
+                <div class="range-toggle" id="range-eff"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="eff-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>FC vs allure</h3><p class="chart-sub">Ta signature cardio par sortie</p></div>
+                <div class="range-toggle" id="range-hrpace"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="hrpace-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Cadence</h3><p class="chart-sub">Pas par minute + moyenne glissante</p></div>
+                <div class="range-toggle" id="range-cadence"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="cadence-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Charge d’entraînement</h3><p class="chart-sub">Effort relatif par semaine</p></div>
+                <div class="range-toggle" id="range-effort"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="effort-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Distribution des distances</h3><p class="chart-sub">Nombre de sorties par tranche</p></div>
+                <div class="range-toggle" id="range-distrib"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="distrib-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Quand cours-tu ?</h3><p class="chart-sub">Volume par jour de la semaine</p></div>
+                <div class="range-toggle" id="range-weekday"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="weekday-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Dénivelé positif</h3><p class="chart-sub">Mètres de D+ par mois</p></div>
+                <div class="range-toggle" id="range-elev"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="elev-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head">
+                <div><h3>Calories brûlées</h3><p class="chart-sub">kcal par mois</p></div>
+                <div class="range-toggle" id="range-calories"></div>
+              </div>
+              <div class="chart-wrap"><canvas id="calories-chart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
         <!-- Records -->
         <section class="dash-section">
           <h2 class="dash-section-title">Records personnels</h2>
@@ -220,11 +321,11 @@
       <p>App personnelle de Nathan Martel — données via l’API Strava, stockées uniquement dans ce navigateur.</p>
     </footer>
 
-    <script src="js/config.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/analysis.js"></script>
-    <script src="js/demo.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/config.js?v=5"></script>
+    <script src="js/auth.js?v=5"></script>
+    <script src="js/api.js?v=5"></script>
+    <script src="js/analysis.js?v=5"></script>
+    <script src="js/demo.js?v=5"></script>
+    <script src="js/app.js?v=5"></script>
   </body>
 </html>

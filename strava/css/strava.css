@@ -796,6 +796,86 @@ img { max-width: 100%; display: block; }
 .plan-summary span { font-size: 1rem; color: var(--text-muted); }
 .plan-summary strong { font-family: var(--font-display); font-size: 1.5rem; color: var(--orange); }
 
+.plan-field input[type="text"],
+.plan-field input[type="number"] {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  outline: none;
+  width: 130px;
+}
+
+.plan-field input:focus { border-color: var(--orange); }
+
+.weeks-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.weeks-input input { width: 70px; text-align: right; }
+.weeks-input span { color: var(--text-muted); font-size: 0.9rem; }
+
+.plan-race-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: stretch;
+  margin-bottom: 1.2rem;
+}
+
+.plan-pace-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--orange-soft);
+  border: 1px solid rgba(252, 76, 2, 0.4);
+  border-radius: 12px;
+  padding: 0.8rem 1.3rem;
+  min-width: 130px;
+}
+
+.plan-pace-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.plan-pace-value {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--orange-bright);
+}
+
+.plan-feasibility {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 12px;
+  padding: 0.8rem 1.2rem;
+  border: 1px solid var(--border-strong);
+  border-left-width: 4px;
+}
+
+.plan-feasibility[data-tone="good"] { border-left-color: var(--green); }
+.plan-feasibility[data-tone="warn"] { border-left-color: var(--orange); }
+.plan-feasibility[data-tone="bad"] { border-left-color: var(--red); }
+
+.plan-feas-label { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
+.plan-feas-detail { color: var(--text-muted); font-size: 0.86rem; margin-top: 0.2rem; }
+
+.plan-volume-note { color: var(--text-muted); font-size: 0.95rem; margin: 0 0 1.1rem; }
+.plan-volume-note strong { font-family: var(--font-display); font-size: 1.25rem; color: var(--orange); }
+
 .plan-sessions {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));

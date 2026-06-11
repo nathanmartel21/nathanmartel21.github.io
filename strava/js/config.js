@@ -25,7 +25,10 @@ const PKEY = {
   lastSync: 'last_sync',
   weeklyGoal: 'weekly_goal',
   planSessions: 'plan_sessions',
-  planObjective: 'plan_objective'
+  planObjective: 'plan_objective',
+  planTargetTime: 'plan_target_time',
+  planWeeks: 'plan_weeks',
+  planRaceKm: 'plan_race_km'
 };
 
 const DEMO_ID = 'demo';

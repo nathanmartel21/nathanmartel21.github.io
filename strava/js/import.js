@@ -132,8 +132,16 @@ const COLUMN_SYNONYMS = {
   movingTime: ['moving time', 'durée de déplacement', 'temps de déplacement', 'temps de mouvement', 'time', 'temps'],
   elapsedTime: ['elapsed time', 'durée', 'temps écoulé', 'durée écoulée'],
   elevation: ['elevation gain', 'dénivelé positif', "gain d'altitude", 'dénivelé', 'total ascent', 'ascension totale', 'dénivelé positif total'],
+  elevLoss: ['elevation loss', 'perte de dénivelé', 'dénivelé négatif', 'descente totale'],
   avgHr: ['average heart rate', 'fréquence cardiaque moyenne', 'fc moyenne', 'avg hr', 'fréq. cardiaque moyenne'],
-  maxHr: ['max heart rate', 'fréquence cardiaque maximale', 'fc max', 'max hr', 'fréq. cardiaque maximale']
+  maxHr: ['max heart rate', 'fréquence cardiaque maximale', 'fc max', 'max hr', 'fréq. cardiaque maximale'],
+  cadence: ['average cadence', 'cadence moyenne', 'avg run cadence', 'cadence de course moyenne'],
+  calories: ['calories', 'calories actives'],
+  effort: ['relative effort', 'effort relatif', 'charge'],
+  gap: ['average grade adjusted pace', 'allure ajustée au dénivelé moyenne', 'allure corrigée moyenne', "allure ajustée"],
+  grade: ['average grade', 'pente moyenne'],
+  steps: ['total steps', 'nombre de pas', 'pas totaux'],
+  temp: ['average temperature', 'température moyenne']
 };
 
 function indicesFor(header, syns) {
@@ -164,6 +172,21 @@ function pickTimeIndex(indices, dataRows) {
     if (ok > 0.8) return idx;
   }
   return indices.length ? indices[0] : -1;
+}
+
+/* Some fields (e.g. Relative Effort) appear in several columns; keep the
+   one with the most non-empty values. */
+function pickFilledIndex(indices, dataRows) {
+  let best = -1;
+  let bestFill = -1;
+  for (const idx of indices) {
+    const fill = dataRows.reduce((acc, r) => {
+      const v = r[idx];
+      return acc + (v != null && v !== '' && v !== '--' ? 1 : 0);
+    }, 0);
+    if (fill > bestFill) { bestFill = fill; best = idx; }
+  }
+  return best;
 }
 
 /* Distance is repeated too: an early column in the athlete's unit (km)
@@ -208,10 +231,22 @@ function parseStravaExport(text) {
   const iMoving = pickTimeIndex(col.movingTime, data);
   const iElapsed = pickTimeIndex(col.elapsedTime, data);
   const iElev = pickNumericIndex(col.elevation, data);
-  const iAvgHr = col.avgHr[0] ?? -1;
-  const iMaxHr = col.maxHr[0] ?? -1;
+  const iElevLoss = pickNumericIndex(col.elevLoss, data);
+  const iAvgHr = pickFilledIndex(col.avgHr, data);
+  const iMaxHr = pickFilledIndex(col.maxHr, data);
+  const iCadence = pickFilledIndex(col.cadence, data);
+  const iCalories = pickFilledIndex(col.calories, data);
+  const iEffort = pickFilledIndex(col.effort, data);
+  const iGap = pickFilledIndex(col.gap, data);
+  const iGrade = pickFilledIndex(col.grade, data);
+  const iSteps = pickFilledIndex(col.steps, data);
+  const iTemp = pickFilledIndex(col.temp, data);
 
   const get = (r, i) => (i >= 0 ? r[i] : undefined);
+  const numOf = (r, i) => {
+    const v = numParse(get(r, i));
+    return Number.isFinite(v) ? v : null;
+  };
 
   const activities = [];
   let skipped = 0;
@@ -227,8 +262,16 @@ function parseStravaExport(text) {
     if (movingTime < 30) { skipped++; continue; }
 
     const elev = numParse(get(r, iElev));
-    const avgHr = numParse(get(r, iAvgHr));
-    const maxHr = numParse(get(r, iMaxHr));
+    const avgHr = numOf(r, iAvgHr);
+    const maxHr = numOf(r, iMaxHr);
+    const cadence = numOf(r, iCadence);
+    const calories = numOf(r, iCalories);
+    const effort = numOf(r, iEffort);
+    const gap = numOf(r, iGap);
+    const grade = numOf(r, iGrade);
+    const steps = numOf(r, iSteps);
+    const temp = numOf(r, iTemp);
+    const elevLoss = numOf(r, iElevLoss);
     const rawId = get(r, iId);
     const id = rawId && String(rawId).trim()
       ? String(rawId).trim()
@@ -242,12 +285,20 @@ function parseStravaExport(text) {
       moving_time: Math.round(movingTime),
       elapsed_time: Math.round(Number.isFinite(elapsed) ? elapsed : movingTime),
       elev: Number.isFinite(elev) ? Math.round(elev) : 0,
+      elev_loss: elevLoss != null ? Math.round(elevLoss) : null,
       date,
       avg_speed: movingTime > 0 ? distance / movingTime : 0,
       max_speed: 0,
-      avg_hr: Number.isFinite(avgHr) && avgHr > 0 ? Math.round(avgHr) : null,
-      max_hr: Number.isFinite(maxHr) && maxHr > 0 ? Math.round(maxHr) : null,
-      effort: null,
+      avg_hr: avgHr && avgHr > 0 ? Math.round(avgHr) : null,
+      max_hr: maxHr && maxHr > 0 ? Math.round(maxHr) : null,
+      /* Strava stores run cadence per leg — ×2 for steps/min. */
+      cadence: cadence && cadence > 0 ? Math.round(cadence * 2) : null,
+      calories: calories && calories > 0 ? Math.round(calories) : null,
+      effort: effort != null && effort >= 0 ? Math.round(effort) : null,
+      gap_speed: gap && gap > 0 ? gap : null,
+      avg_grade: grade != null ? grade : null,
+      steps: steps && steps > 0 ? Math.round(steps) : null,
+      temp: temp != null ? temp : null,
       kudos: 0
     });
   }
