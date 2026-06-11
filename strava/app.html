@@ -20,10 +20,11 @@
         </a>
         <div class="topbar-actions">
           <span class="demo-badge" id="demo-badge" hidden>MODE DÉMO</span>
-          <span class="athlete-chip" id="athlete-chip" hidden>
-            <img id="athlete-avatar" alt="" hidden />
-            <span id="athlete-name"></span>
+          <span class="profile-switcher" id="profile-switcher">
+            <img id="profile-avatar" alt="" hidden />
+            <select id="profile-select" aria-label="Changer d’athlète"></select>
           </span>
+          <a class="btn btn-ghost btn-sm" href="index.html?add=1" title="Connecter le compte Strava d’un autre athlète">+ Athlète</a>
           <button class="btn btn-ghost btn-sm" id="refresh-btn">↻ Actualiser</button>
           <button class="btn btn-ghost btn-sm" id="logout-btn">Déconnexion</button>
         </div>

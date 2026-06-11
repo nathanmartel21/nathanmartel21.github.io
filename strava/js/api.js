@@ -1,5 +1,6 @@
-/* Strava API client: fetches the athlete profile and all activities,
-   keeps a slimmed-down copy in localStorage and syncs incrementally. */
+/* Strava API client: fetches the active athlete's profile and all their
+   activities, keeps a slimmed-down copy in the active profile's storage
+   and syncs incrementally. */
 
 const STRAVA_API = 'https://www.strava.com/api/v3';
 
@@ -11,7 +12,7 @@ async function apiGet(path, params = {}) {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (response.status === 401) {
-    throw new Error('Session expirée — reconnecte-toi à Strava.');
+    throw new Error('Session expirée — reconnecte ce profil à Strava.');
   }
   if (response.status === 429) {
     throw new Error('Limite de requêtes Strava atteinte — réessaie dans 15 minutes.');
@@ -45,7 +46,13 @@ function slimActivity(act) {
 
 async function fetchAthlete() {
   const athlete = await apiGet('/athlete');
-  Store.setJSON(STORE.athlete, athlete);
+  Profile.setJSON(PKEY.athlete, athlete);
+  /* Keep the registry label/avatar in sync. */
+  upsertProfile({
+    id: getActiveId(),
+    name: profileNameFromAthlete(athlete),
+    avatar: athlete.profile_medium || athlete.profile || null
+  });
   return athlete;
 }
 
@@ -65,11 +72,11 @@ async function fetchActivitiesPaged(extraParams, onProgress) {
 }
 
 /* Full fetch on first run, then incremental (re-fetches the last 7 days
-   to pick up edits) on subsequent syncs. Returns activities sorted by
-   date, most recent first. */
+   to pick up edits) on subsequent syncs. Stored on the active profile.
+   Returns activities sorted by date, most recent first. */
 async function syncActivities(onProgress) {
-  const cached = Store.getJSON(STORE.activities) || [];
-  const lastSync = Number(Store.get(STORE.lastSync) || 0);
+  const cached = Profile.getJSON(PKEY.activities) || [];
+  const lastSync = Number(Profile.get(PKEY.lastSync) || 0);
   let merged;
 
   if (cached.length && lastSync) {
@@ -82,15 +89,15 @@ async function syncActivities(onProgress) {
   }
 
   merged.sort((a, b) => new Date(b.date) - new Date(a.date));
-  Store.setJSON(STORE.activities, merged);
-  Store.set(STORE.lastSync, String(Math.floor(Date.now() / 1000)));
+  Profile.setJSON(PKEY.activities, merged);
+  Profile.set(PKEY.lastSync, String(Math.floor(Date.now() / 1000)));
   return merged;
 }
 
 function getCachedActivities() {
-  return Store.getJSON(STORE.activities);
+  return Profile.getJSON(PKEY.activities);
 }
 
 function getCachedAthlete() {
-  return Store.getJSON(STORE.athlete);
+  return Profile.getJSON(PKEY.athlete);
 }

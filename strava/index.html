@@ -98,10 +98,16 @@
           </div>
         </div>
 
-        <!-- State 2: configured, ready to connect -->
+        <!-- State 2: configured, ready to connect an athlete -->
         <div id="connect-view" hidden>
-          <h2>Prêt à te connecter</h2>
-          <p>Clé API enregistrée. Autorise l’application à lire tes activités Strava.</p>
+          <h2 id="connect-title">Prêt à te connecter</h2>
+          <p id="connect-intro">Clé API enregistrée. Autorise l’application à lire tes activités Strava.</p>
+          <div class="brother-tip" id="brother-tip" hidden>
+            👬 <strong>Pour connecter ton frère :</strong> sur la page Strava qui va s’ouvrir,
+            il doit être connecté avec <em>son</em> compte Strava (pas le tien). Au besoin,
+            ouvre d’abord <a href="https://www.strava.com/login" target="_blank" rel="noreferrer">strava.com</a>
+            dans cet onglet pour basculer de compte, puis reviens cliquer ci-dessous.
+          </div>
           <div class="auth-actions">
             <button class="btn btn-orange btn-big" id="connect-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
@@ -115,13 +121,14 @@
           </div>
         </div>
 
-        <!-- State 3: already connected -->
+        <!-- State 3: one or more athletes connected -->
         <div id="connected-view" hidden>
-          <h2>Compte connecté ✓</h2>
-          <p>Ton compte Strava est lié. Direction le dashboard.</p>
+          <h2>Athlètes connectés</h2>
+          <p>Choisis un profil pour ouvrir son dashboard, ou ajoute un autre athlète (ton frère par exemple).</p>
+          <div class="profiles-list" id="profiles-list"></div>
           <div class="auth-actions">
-            <a class="btn btn-orange btn-big" href="app.html">Ouvrir mon dashboard</a>
-            <button class="btn btn-ghost btn-sm" id="logout-btn">Déconnexion</button>
+            <a class="btn btn-orange btn-big" href="app.html">Ouvrir le dashboard</a>
+            <button class="btn btn-ghost" id="add-athlete-btn">+ Connecter un autre athlète</button>
           </div>
         </div>
 
@@ -141,6 +148,8 @@
     <script src="js/auth.js"></script>
     <script>
       const views = ['setup-view', 'connect-view', 'connected-view', 'exchanging-view'];
+      /* True when the connect screen is opened to add an extra athlete. */
+      let addingAthlete = false;
 
       function showView(id) {
         views.forEach(v => { document.getElementById(v).hidden = v !== id; });
@@ -153,22 +162,75 @@
       }
 
       function startDemo() {
-        clearSession();
-        Store.set(STORE.demoMode, '1');
+        ensureDemoProfile();
         window.location.href = 'app.html';
+      }
+
+      function showConnectView(forAdding) {
+        addingAthlete = Boolean(forAdding);
+        document.getElementById('connect-title').textContent =
+          forAdding ? 'Connecter un autre athlète' : 'Prêt à te connecter';
+        document.getElementById('connect-intro').textContent =
+          forAdding
+            ? 'Autorise un second compte Strava — il aura son propre dashboard, basculable depuis le menu en haut.'
+            : 'Clé API enregistrée. Autorise l’application à lire tes activités Strava.';
+        document.getElementById('brother-tip').hidden = !forAdding;
+        showView('connect-view');
+      }
+
+      function renderProfilesList() {
+        const list = document.getElementById('profiles-list');
+        const profiles = getProfiles();
+        list.innerHTML = profiles.map(p => `
+          <div class="profile-row">
+            <div class="profile-row-main" data-open="${p.id}">
+              <span class="profile-dot">${p.demo ? '🧪' : '🏃'}</span>
+              <span class="profile-row-name">${p.name || 'Athlète'}</span>
+              ${p.demo ? '<span class="profile-tag">démo</span>' : ''}
+            </div>
+            <button class="profile-remove" data-remove="${p.id}" title="Déconnecter ce profil">✕</button>
+          </div>
+        `).join('');
+
+        list.querySelectorAll('[data-open]').forEach(el => {
+          el.addEventListener('click', () => {
+            setActiveId(el.getAttribute('data-open'));
+            window.location.href = 'app.html';
+          });
+        });
+        list.querySelectorAll('[data-remove]').forEach(el => {
+          el.addEventListener('click', () => {
+            const id = el.getAttribute('data-remove');
+            const profile = getProfile(id);
+            if (confirm(`Déconnecter « ${profile ? profile.name : 'ce profil'} » ? Ses données mises en cache seront effacées.`)) {
+              removeProfile(id);
+              route();
+            }
+          });
+        });
       }
 
       async function handleOAuthCallback(code) {
         showView('exchanging-view');
         try {
           await exchangeCode(code);
-          /* Clean the code from the URL so a refresh doesn't replay it. */
           window.history.replaceState({}, '', window.location.pathname);
           showStatus('success', 'Connexion réussie ! Redirection…');
           setTimeout(() => { window.location.href = 'app.html'; }, 600);
         } catch (err) {
           showStatus('error', err.message);
-          showView(isConfigured() ? 'connect-view' : 'setup-view');
+          route();
+        }
+      }
+
+      /* Decides which screen to show based on current state. */
+      function route() {
+        if (!isConfigured()) { showView('setup-view'); return; }
+        if (hasProfiles()) {
+          renderProfilesList();
+          showView('connected-view');
+        } else {
+          showConnectView(false);
         }
       }
 
@@ -176,7 +238,7 @@
         const params = new URLSearchParams(window.location.search);
 
         if (params.get('error')) {
-          showStatus('error', "Autorisation refusée côté Strava. Réessaie quand tu veux.");
+          showStatus('error', 'Autorisation refusée côté Strava. Réessaie quand tu veux.');
           window.history.replaceState({}, '', window.location.pathname);
         }
 
@@ -186,17 +248,13 @@
           return;
         }
 
-        if (isDemoMode()) {
-          window.location.href = 'app.html';
+        if (params.get('add') === '1' && isConfigured()) {
+          window.history.replaceState({}, '', window.location.pathname);
+          showConnectView(true);
           return;
         }
-        if (isConnected()) {
-          showView('connected-view');
-        } else if (isConfigured()) {
-          showView('connect-view');
-        } else {
-          showView('setup-view');
-        }
+
+        route();
       }
 
       document.getElementById('save-connect-btn').addEventListener('click', () => {
@@ -206,25 +264,23 @@
           showStatus('error', 'Renseigne le Client ID et le Client Secret.');
           return;
         }
-        Store.set(STORE.clientId, id);
-        Store.set(STORE.clientSecret, secret);
-        window.location.href = buildAuthorizeUrl();
+        Store.set(APP.clientId, id);
+        Store.set(APP.clientSecret, secret);
+        window.location.href = buildAuthorizeUrl(false);
       });
 
       document.getElementById('connect-btn').addEventListener('click', () => {
-        window.location.href = buildAuthorizeUrl();
+        window.location.href = buildAuthorizeUrl(addingAthlete);
+      });
+
+      document.getElementById('add-athlete-btn').addEventListener('click', () => {
+        showConnectView(true);
       });
 
       document.getElementById('reset-config-btn').addEventListener('click', () => {
-        Store.remove(STORE.clientId);
-        Store.remove(STORE.clientSecret);
-        clearSession();
+        Store.remove(APP.clientId);
+        Store.remove(APP.clientSecret);
         showView('setup-view');
-      });
-
-      document.getElementById('logout-btn').addEventListener('click', () => {
-        clearSession();
-        showView(isConfigured() ? 'connect-view' : 'setup-view');
       });
 
       document.getElementById('demo-btn-setup').addEventListener('click', startDemo);

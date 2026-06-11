@@ -1,7 +1,9 @@
-/* Strava OAuth2 flow (authorization code).
+/* Strava OAuth2 flow (authorization code), multi-athlete aware.
+
    The token exchange uses https://www.strava.com/api/v3/oauth/token,
    which supports CORS, so everything runs in the browser — credentials
-   never leave this device. */
+   never leave this device. The athlete returned by the exchange decides
+   which profile the tokens belong to. */
 
 const STRAVA_AUTHORIZE_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/api/v3/oauth/token';
@@ -13,33 +15,39 @@ function redirectUri() {
   return url.origin + url.pathname;
 }
 
-function buildAuthorizeUrl() {
+/* `force` re-shows Strava's consent screen — used when adding a second
+   athlete so the right account can be authorised. */
+function buildAuthorizeUrl(force) {
   const params = new URLSearchParams({
-    client_id: Store.get(STORE.clientId),
+    client_id: Store.get(APP.clientId),
     redirect_uri: redirectUri(),
     response_type: 'code',
     scope: STRAVA_SCOPE,
-    approval_prompt: 'auto'
+    approval_prompt: force ? 'force' : 'auto'
   });
   return `${STRAVA_AUTHORIZE_URL}?${params.toString()}`;
 }
 
-function saveTokens(data) {
-  Store.set(STORE.accessToken, data.access_token);
-  Store.set(STORE.refreshToken, data.refresh_token);
-  Store.set(STORE.expiresAt, String(data.expires_at));
-  if (data.athlete) {
-    Store.setJSON(STORE.athlete, data.athlete);
-  }
+function profileNameFromAthlete(athlete) {
+  return `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim() || 'Athlète';
 }
 
+function saveTokens(data, id) {
+  Profile.set(PKEY.accessToken, data.access_token, id);
+  Profile.set(PKEY.refreshToken, data.refresh_token, id);
+  Profile.set(PKEY.expiresAt, String(data.expires_at), id);
+  if (data.athlete) Profile.setJSON(PKEY.athlete, data.athlete, id);
+}
+
+/* Exchanges the OAuth code, creates/updates the matching profile and
+   makes it active. Returns the profile id. */
 async function exchangeCode(code) {
   const response = await fetch(STRAVA_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: Store.get(STORE.clientId),
-      client_secret: Store.get(STORE.clientSecret),
+      client_id: Store.get(APP.clientId),
+      client_secret: Store.get(APP.clientSecret),
       code,
       grant_type: 'authorization_code'
     })
@@ -47,37 +55,55 @@ async function exchangeCode(code) {
   if (!response.ok) {
     throw new Error(`Échec de l'échange du code (HTTP ${response.status}). Vérifie ton Client ID / Secret.`);
   }
-  saveTokens(await response.json());
+  const data = await response.json();
+  const athlete = data.athlete || {};
+  const id = String(athlete.id || `a${Date.now()}`);
+  upsertProfile({
+    id,
+    name: profileNameFromAthlete(athlete),
+    avatar: athlete.profile_medium || athlete.profile || null
+  });
+  saveTokens(data, id);
+  setActiveId(id);
+  return id;
 }
 
-async function refreshAccessToken() {
+async function refreshAccessToken(id = getActiveId()) {
   const response = await fetch(STRAVA_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: Store.get(STORE.clientId),
-      client_secret: Store.get(STORE.clientSecret),
-      refresh_token: Store.get(STORE.refreshToken),
+      client_id: Store.get(APP.clientId),
+      client_secret: Store.get(APP.clientSecret),
+      refresh_token: Profile.get(PKEY.refreshToken, id),
       grant_type: 'refresh_token'
     })
   });
   if (!response.ok) {
     throw new Error(`Impossible de rafraîchir le token (HTTP ${response.status}).`);
   }
-  saveTokens(await response.json());
+  saveTokens(await response.json(), id);
 }
 
-/* Returns a valid access token, refreshing it first if it expires soon. */
+/* Returns a valid access token for the active profile, refreshing it
+   first if it expires soon. */
 async function getAccessToken() {
-  const expiresAt = Number(Store.get(STORE.expiresAt) || 0);
+  const id = getActiveId();
+  const expiresAt = Number(Profile.get(PKEY.expiresAt, id) || 0);
   const now = Math.floor(Date.now() / 1000);
   if (now > expiresAt - 300) {
-    await refreshAccessToken();
+    await refreshAccessToken(id);
   }
-  return Store.get(STORE.accessToken);
+  return Profile.get(PKEY.accessToken, id);
 }
 
-function logout() {
-  clearSession();
-  window.location.href = 'index.html';
+/* Removes the active profile and routes to the next sensible screen. */
+function logoutActive() {
+  const id = getActiveId();
+  if (id) removeProfile(id);
+  if (hasProfiles()) {
+    window.location.reload();
+  } else {
+    window.location.href = 'index.html';
+  }
 }

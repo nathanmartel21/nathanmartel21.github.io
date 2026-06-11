@@ -8,7 +8,7 @@
 
   /* ---------------- Guard ---------------- */
 
-  if (!isDemoMode() && !isConnected()) {
+  if (!activeHasSession()) {
     window.location.replace('index.html');
     return;
   }
@@ -43,7 +43,7 @@
   /* ---------------- Data loading ---------------- */
 
   async function loadData(forceSync) {
-    if (isDemoMode()) {
+    if (isActiveDemo()) {
       const demo = demoData();
       return { athlete: demo.athlete, activities: demo.activities };
     }
@@ -64,16 +64,27 @@
 
   /* ---------------- Rendering ---------------- */
 
-  function renderAthlete(athlete) {
-    if (isDemoMode()) $('demo-badge').hidden = false;
-    const chip = $('athlete-chip');
-    chip.hidden = false;
-    $('athlete-name').textContent = `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim() || 'Athlète';
-    const avatarUrl = athlete.profile_medium || athlete.profile;
+  function renderSwitcher(athlete) {
+    if (isActiveDemo()) $('demo-badge').hidden = false;
+
+    const select = $('profile-select');
+    const profiles = getProfiles();
+    const activeId = getActiveId();
+    select.innerHTML = profiles
+      .map(p => `<option value="${p.id}"${p.id === activeId ? ' selected' : ''}>${p.name || 'Athlète'}</option>`)
+      .join('');
+    select.onchange = () => {
+      setActiveId(select.value);
+      window.location.reload();
+    };
+
+    const avatarUrl = (athlete && (athlete.profile_medium || athlete.profile)) || null;
     if (avatarUrl && !String(avatarUrl).includes('avatar/athlete')) {
-      const img = $('athlete-avatar');
+      const img = $('profile-avatar');
       img.src = avatarUrl;
       img.hidden = false;
+    } else {
+      $('profile-avatar').hidden = true;
     }
   }
 
@@ -302,7 +313,7 @@
   function renderGoal(runs) {
     const stats = periodStats(runs);
     const defaultGoal = Math.max(Math.round(stats.prev28.km / 4) || 20, 10);
-    const saved = Number(Store.get(STORE.weeklyGoal));
+    const saved = Number(Profile.get(PKEY.weeklyGoal));
     const goal = saved > 0 ? saved : defaultGoal;
 
     const input = $('goal-input');
@@ -310,7 +321,7 @@
 
     function update() {
       const target = Number(input.value) || defaultGoal;
-      Store.set(STORE.weeklyGoal, String(target));
+      Profile.set(PKEY.weeklyGoal, String(target));
       const done = stats.week.km;
       const pct = Math.min((done / target) * 100, 100);
       $('goal-fill').style.width = `${pct}%`;
@@ -359,7 +370,7 @@
 
   function renderAll(athlete, activities) {
     const runs = runsOnly(activities);
-    renderAthlete(athlete);
+    renderSwitcher(athlete);
     renderSuggestion(runs);
     renderKpis(runs);
     renderWeeklyChart(runs);
@@ -375,10 +386,16 @@
 
   /* ---------------- Events ---------------- */
 
-  $('logout-btn').addEventListener('click', logout);
+  $('logout-btn').addEventListener('click', () => {
+    const profile = getActiveProfile();
+    const label = profile ? profile.name : 'ce profil';
+    if (confirm(`Déconnecter « ${label} » ? Ses données mises en cache sur ce navigateur seront effacées.`)) {
+      logoutActive();
+    }
+  });
 
   $('refresh-btn').addEventListener('click', async () => {
-    if (isDemoMode()) {
+    if (isActiveDemo()) {
       window.location.reload();
       return;
     }
@@ -400,7 +417,7 @@
 
   (async function boot() {
     try {
-      setLoader(true, isDemoMode() ? 'Génération des données de démo…' : 'Chargement des activités…');
+      setLoader(true, isActiveDemo() ? 'Génération des données de démo…' : 'Chargement des activités…');
       const { athlete, activities } = await loadData(false);
       renderAll(athlete, activities);
     } catch (err) {
