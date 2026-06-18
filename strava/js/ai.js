@@ -30,11 +30,11 @@
   const LS_MODEL = 'strava_ai_model';    // localStorage: chosen model id
 
   const FREE_MODELS = [
-    { id: 'deepseek/deepseek-chat-v3:free', label: 'DeepSeek V3 (recommandé)' },
-    { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 (raisonnement)' },
-    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B' },
-    { id: 'qwen/qwen3-235b-a22b:free', label: 'Qwen3 235B' },
-    { id: 'google/gemini-2.0-flash-exp:free', label: 'Gemini 2.0 Flash (exp)' }
+    { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (recommandé)' },
+    { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B' },
+    { id: 'qwen/qwen3-next-80b-a3b-instruct:free', label: 'Qwen3 Next 80B' },
+    { id: 'nousresearch/hermes-3-llama-3.1-405b:free', label: 'Hermes 3 405B' },
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B' }
   ];
   const DEFAULT_MODEL = FREE_MODELS[0].id;
 
@@ -83,7 +83,10 @@
   function setDeviceKey(key) { localStorage.setItem(LS_KEY, key); }
   function clearKeys() { sessionStorage.removeItem(SS_KEY); localStorage.removeItem(LS_KEY); }
 
-  function chosenModel() { return localStorage.getItem(LS_MODEL) || DEFAULT_MODEL; }
+  function chosenModel() {
+    const stored = localStorage.getItem(LS_MODEL);
+    return FREE_MODELS.some(m => m.id === stored) ? stored : DEFAULT_MODEL;
+  }
   function setChosenModel(m) { localStorage.setItem(LS_MODEL, m); }
 
   /* ---------------------------------------------------------------- */
