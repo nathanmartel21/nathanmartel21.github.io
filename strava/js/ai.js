@@ -89,6 +89,21 @@
   }
   function setChosenModel(m) { localStorage.setItem(LS_MODEL, m); }
 
+  /* Conversation persistence — one stored history per athlete profile, so
+     reloading the dashboard (or coming back later) keeps the discussion. */
+  function chatKey() {
+    const id = (typeof getActiveId === 'function' && getActiveId()) || 'default';
+    return `strava_ai_chat_${id}`;
+  }
+  function loadTurns() {
+    try { return JSON.parse(localStorage.getItem(chatKey())) || []; }
+    catch { return []; }
+  }
+  function saveTurns(turns) {
+    try { localStorage.setItem(chatKey(), JSON.stringify(turns)); } catch {}
+  }
+  function clearTurns() { localStorage.removeItem(chatKey()); }
+
   /* ---------------------------------------------------------------- */
   /* Athlete summary — what the LLM reads before answering             */
   /* ---------------------------------------------------------------- */
@@ -359,15 +374,17 @@
 
   function AICoach() {
     let summary = null;
-    let history = [];          // conversation messages (system + turns)
+    let turns = [];            // persisted user/assistant turns (no system msg)
     let busy = false;
     let controller = null;
 
-    function ensureSystem() {
-      if (!history.length) history = [{ role: 'system', content: systemPrompt(summary) }];
+    /* True when the log is scrolled (near) the bottom — used so streaming
+       doesn't yank the view down while the user scrolls up to read. */
+    function isPinned(el) {
+      return el.scrollHeight - el.scrollTop - el.clientHeight < 60;
     }
 
-    function appendMessage(role, contentHtml, opts = {}) {
+    function appendMessage(role, contentHtml) {
       const log = $('ai-chat-log');
       const wrap = document.createElement('div');
       wrap.className = `ai-msg ai-${role}`;
@@ -380,34 +397,45 @@
       return body;
     }
 
+    function renderTurn(t) {
+      appendMessage(t.role, t.role === 'user' ? escapeHtml(t.content) : renderMarkdown(t.content));
+    }
+
     async function runConversation(userText) {
       if (busy) return;
       const key = activeKey();
       if (!key) { showKeyGate(); return; }
 
-      ensureSystem();
       appendMessage('user', escapeHtml(userText));
-      history.push({ role: 'user', content: userText });
+      turns.push({ role: 'user', content: userText });
+      saveTurns(turns);
 
+      const messages = [{ role: 'system', content: systemPrompt(summary) }, ...turns];
+      const log = $('ai-chat-log');
       const bodyEl = appendMessage('assistant', '<span class="ai-cursor">▍</span>');
       busy = true;
       controller = new AbortController();
       setBusy(true);
 
+      let acc = '';
       try {
-        const full = await streamChat(history, (_d, acc) => {
-          bodyEl.innerHTML = renderMarkdown(acc) + '<span class="ai-cursor">▍</span>';
-          $('ai-chat-log').scrollTop = $('ai-chat-log').scrollHeight;
+        acc = await streamChat(messages, (_d, full) => {
+          const pinned = isPinned(log);
+          bodyEl.innerHTML = renderMarkdown(full) + '<span class="ai-cursor">▍</span>';
+          if (pinned) log.scrollTop = log.scrollHeight;
         }, controller.signal);
-        bodyEl.innerHTML = renderMarkdown(full);
-        history.push({ role: 'assistant', content: full });
+        bodyEl.innerHTML = renderMarkdown(acc);
+        turns.push({ role: 'assistant', content: acc });
+        saveTurns(turns);
       } catch (err) {
         if (err.name === 'AbortError') {
-          bodyEl.innerHTML += '<p class="ai-aborted">— interrompu —</p>';
+          bodyEl.innerHTML = renderMarkdown(acc) + '<p class="ai-aborted">— interrompu —</p>';
+          if (acc) { turns.push({ role: 'assistant', content: acc }); saveTurns(turns); }
         } else if (err.message === 'NO_KEY') {
-          bodyEl.remove(); showKeyGate();
+          bodyEl.remove(); turns.pop(); saveTurns(turns); showKeyGate();
         } else {
           bodyEl.innerHTML = `<p class="ai-error">⚠️ ${escapeHtml(err.message)}</p>`;
+          turns.pop(); saveTurns(turns); // drop the unanswered user turn
         }
       } finally {
         busy = false; controller = null; setBusy(false);
@@ -479,17 +507,22 @@
     function mount(activities) {
       summary = buildAthleteSummary(activities);
 
-      // model selector
+      // restore the saved conversation for the active profile
+      turns = loadTurns();
+      $('ai-chat-log').innerHTML = '';
+      turns.forEach(renderTurn);
+
+      // model selector (changing model keeps the conversation)
       const sel = $('ai-model');
       sel.innerHTML = FREE_MODELS.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
       sel.value = chosenModel();
-      sel.addEventListener('change', () => { setChosenModel(sel.value); history = []; });
+      sel.addEventListener('change', () => setChosenModel(sel.value));
 
       // key gate buttons
       $('ai-unlock-btn').addEventListener('click', unlockWithPassphrase);
       $('ai-pass-input').addEventListener('keydown', e => { if (e.key === 'Enter') unlockWithPassphrase(); });
       $('ai-own-key-btn').addEventListener('click', saveOwnKey);
-      $('ai-forget-key').addEventListener('click', () => { clearKeys(); history = []; showKeyGate(); });
+      $('ai-forget-key').addEventListener('click', () => { clearKeys(); showKeyGate(); });
 
       // chat
       const send = () => {
@@ -509,15 +542,15 @@
       });
       $('ai-stop').addEventListener('click', () => { if (controller) controller.abort(); });
 
-      // plan form
+      // plan form — appends to the ongoing conversation
       $('ai-plan-generate').addEventListener('click', () => {
-        const form = readPlanForm();
-        history = []; // a generated plan starts a fresh, focused conversation
-        runConversation(planRequestPrompt(form));
+        runConversation(planRequestPrompt(readPlanForm()));
       });
       $('ai-clear-chat').addEventListener('click', () => {
+        if (turns.length && !confirm('Effacer toute la conversation ?')) return;
         $('ai-chat-log').innerHTML = '';
-        history = [];
+        turns = [];
+        clearTurns();
       });
 
       // initial gate state
