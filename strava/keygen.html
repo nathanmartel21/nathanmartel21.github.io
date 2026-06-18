@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chiffrer la clé OpenRouter — Strava Premium</title>
+    <style>
+      :root {
+        --bg: #0c0a09; --bg-card: #1a1614; --border: #2b2522;
+        --text: #f3efec; --muted: #a89e97; --orange: #fc4c02; --green: #34d399; --red: #f87171;
+        --mono: "JetBrains Mono", ui-monospace, monospace;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text);
+        font-family: system-ui, sans-serif; line-height: 1.55; padding: 2rem 1rem; }
+      main { max-width: 680px; margin: 0 auto; }
+      h1 { font-size: 1.4rem; }
+      p, li { color: var(--muted); }
+      .card { background: var(--bg-card); border: 1px solid var(--border);
+        border-radius: 14px; padding: 1.5rem; margin: 1.5rem 0; }
+      label { display: block; font-weight: 600; color: var(--text); margin: 1rem 0 .35rem; }
+      input { width: 100%; padding: .7rem .8rem; background: #0c0a09;
+        border: 1px solid var(--border); border-radius: 9px; color: var(--text);
+        font-family: var(--mono); font-size: .95rem; }
+      button { margin-top: 1.25rem; padding: .7rem 1.3rem; border: none; cursor: pointer;
+        background: var(--orange); color: #fff; font-weight: 700; border-radius: 9px; font-size: 1rem; }
+      button:disabled { opacity: .5; cursor: default; }
+      pre { background: #0c0a09; border: 1px solid var(--border); border-radius: 9px;
+        padding: 1rem; overflow: auto; font-family: var(--mono); font-size: .85rem;
+        white-space: pre-wrap; word-break: break-all; color: var(--green); }
+      .warn { color: var(--red); }
+      code { font-family: var(--mono); color: var(--orange); }
+      .copy { background: #2b2522; }
+      a { color: var(--orange); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>🔐 Chiffrer ta clé OpenRouter</h1>
+      <p>
+        Outil <strong>100 % local</strong> (rien n'est envoyé sur le réseau). Il chiffre ta clé
+        OpenRouter avec ton mot de passe (PBKDF2 250 000 itérations + AES-GCM). Tu colleras
+        ensuite le résultat dans <code>strava/js/ai-key.js</code>.
+      </p>
+      <p class="warn">
+        ⚠️ Le blob généré sera public (repo public). Choisis une vraie passphrase, et mets une
+        limite de crédit à 0&nbsp;$ sur ta clé OpenRouter (modèles gratuits uniquement).
+      </p>
+
+      <div class="card">
+        <label for="key">Clé OpenRouter (sk-or-…)</label>
+        <input id="key" type="text" placeholder="sk-or-v1-…" autocomplete="off" />
+
+        <label for="pass">Mot de passe / passphrase</label>
+        <input id="pass" type="text" placeholder="une longue phrase secrète" autocomplete="off" />
+
+        <button id="go">Chiffrer</button>
+        <p id="msg"></p>
+      </div>
+
+      <div class="card" id="out-card" hidden>
+        <label>À coller dans <code>strava/js/ai-key.js</code> (remplace <code>window.AI_KEY_BLOB = null;</code>)</label>
+        <pre id="out"></pre>
+        <button class="copy" id="copy">Copier</button>
+        <p style="margin-top:1rem">
+          Vérification : recharge le dashboard, ouvre le coach IA, tape ta passphrase — la clé doit se déchiffrer.
+        </p>
+      </div>
+    </main>
+
+    <script>
+      const $ = id => document.getElementById(id);
+      function bufToB64(buf) {
+        let bin = '';
+        const bytes = new Uint8Array(buf);
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin);
+      }
+
+      async function encrypt(key, pass) {
+        const enc = new TextEncoder();
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const iter = 250000;
+        const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+        const aesKey = await crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' },
+          base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']
+        );
+        const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, enc.encode(key));
+        return { salt: bufToB64(salt), iv: bufToB64(iv), ct: bufToB64(ct), iter };
+      }
+
+      $('go').addEventListener('click', async () => {
+        const key = $('key').value.trim();
+        const pass = $('pass').value;
+        const msg = $('msg');
+        if (!/^sk-or-/.test(key)) { msg.innerHTML = '<span class="warn">Clé invalide (doit commencer par sk-or-…).</span>'; return; }
+        if (pass.length < 8) { msg.innerHTML = '<span class="warn">Mot de passe trop court (8 caractères min, idéalement une phrase).</span>'; return; }
+        msg.textContent = 'Chiffrement…';
+        try {
+          const blob = await encrypt(key, pass);
+          const text = 'window.AI_KEY_BLOB = ' + JSON.stringify(blob, null, 2) + ';';
+          $('out').textContent = text;
+          $('out-card').hidden = false;
+          msg.innerHTML = '<span style="color:var(--green)">✅ Chiffré. Copie le bloc ci-dessous.</span>';
+        } catch (e) {
+          msg.innerHTML = '<span class="warn">Erreur : ' + e.message + '</span>';
+        }
+      });
+
+      $('copy').addEventListener('click', () => {
+        navigator.clipboard.writeText($('out').textContent);
+        $('copy').textContent = 'Copié ✓';
+        setTimeout(() => ($('copy').textContent = 'Copier'), 1500);
+      });
+    </script>
+  </body>
+</html>

@@ -735,6 +735,7 @@
     renderSwitcher(athlete);
     renderSuggestion(runs);
     renderPlan(runs);
+    if (window.AICoach) AICoach.mount(activities);
     renderKpis(runs);
     renderCondition(runs);
 

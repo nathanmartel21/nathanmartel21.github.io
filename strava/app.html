@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/strava.css?v=5" />
+    <link rel="stylesheet" href="css/strava.css?v=6" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -104,6 +104,99 @@
 
             <p class="plan-volume-note"><strong id="plan-weekly-km">0</strong> km planifiés / semaine</p>
             <div class="plan-sessions" id="plan-sessions"></div>
+          </div>
+        </section>
+
+        <!-- AI coach -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Coach IA <span class="hint">plan personnalisé à partir de toutes tes données</span></h2>
+          <div class="ai-card">
+
+            <!-- Key gate -->
+            <div class="ai-gate" id="ai-key-gate" hidden>
+              <p class="ai-gate-title">🔐 Débloquer le coach IA</p>
+              <div id="ai-pass-row">
+                <label for="ai-pass-input">Mot de passe (déchiffre la clé OpenRouter)</label>
+                <div class="ai-gate-row">
+                  <input id="ai-pass-input" type="password" placeholder="ta passphrase" autocomplete="off" />
+                  <button class="btn btn-orange btn-sm" id="ai-unlock-btn">Débloquer</button>
+                </div>
+              </div>
+              <div id="ai-ownkey-block">
+                <p class="ai-gate-or" id="ai-pass-or">— ou —</p>
+                <label for="ai-own-key-input">Utiliser ta propre clé OpenRouter (stockée sur ce navigateur)</label>
+                <div class="ai-gate-row">
+                  <input id="ai-own-key-input" type="password" placeholder="sk-or-v1-…" autocomplete="off" />
+                  <button class="btn btn-ghost btn-sm" id="ai-own-key-btn">Enregistrer</button>
+                </div>
+                <p class="ai-gate-hint">
+                  Pas de clé ? Crée-en une gratuite sur <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.
+                </p>
+              </div>
+              <p class="ai-key-msg" id="ai-key-msg"></p>
+            </div>
+
+            <!-- Main -->
+            <div id="ai-main">
+              <div class="ai-toolbar">
+                <div class="ai-toolbar-left">
+                  <label for="ai-model">Modèle</label>
+                  <select id="ai-model"></select>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="ai-forget-key" title="Oublier la clé sur ce navigateur">Oublier la clé</button>
+              </div>
+
+              <!-- Plan form -->
+              <div class="ai-plan-form">
+                <p class="ai-plan-title">Générer un plan</p>
+                <div class="ai-plan-grid">
+                  <div class="plan-field">
+                    <label for="ai-plan-objective">Objectif</label>
+                    <select id="ai-plan-objective">
+                      <option value="préparer une course">Préparer une course</option>
+                      <option value="progresser en endurance">Progresser en endurance</option>
+                      <option value="reprise après coupure">Reprise après coupure</option>
+                      <option value="garder la forme">Garder la forme</option>
+                    </select>
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-km">Distance (km)</label>
+                    <input id="ai-plan-km" type="number" min="1" max="200" step="0.1" placeholder="ex. 42.2" />
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-time">Temps visé</label>
+                    <input id="ai-plan-time" type="text" placeholder="ex. 2:59:00" />
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-weeks">Semaines dispo</label>
+                    <input id="ai-plan-weeks" type="number" min="1" max="52" step="1" placeholder="ex. 16" />
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-sessions">Séances / sem.</label>
+                    <input id="ai-plan-sessions" type="number" min="1" max="7" step="1" placeholder="ex. 4" />
+                  </div>
+                  <div class="plan-field ai-plan-notes-field">
+                    <label for="ai-plan-notes">Remarques (optionnel)</label>
+                    <input id="ai-plan-notes" type="text" placeholder="blessure, terrain, dispo…" />
+                  </div>
+                </div>
+                <button class="btn btn-orange" id="ai-plan-generate">✨ Générer mon plan</button>
+              </div>
+
+              <!-- Chat -->
+              <div class="ai-chat">
+                <div class="ai-chat-head">
+                  <span>💬 Discuter avec le coach</span>
+                  <button class="btn btn-ghost btn-sm" id="ai-clear-chat">Effacer</button>
+                </div>
+                <div class="ai-chat-log" id="ai-chat-log"></div>
+                <div class="ai-chat-input">
+                  <textarea id="ai-input" rows="1" placeholder="Ex. « Je vise un marathon sous 3h dans 16 semaines, c'est jouable ? »"></textarea>
+                  <button class="btn btn-ghost btn-sm" id="ai-stop" hidden>■ Stop</button>
+                  <button class="btn btn-orange btn-sm" id="ai-send">Envoyer</button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -321,11 +414,13 @@
       <p>App personnelle de Nathan Martel — données via l’API Strava, stockées uniquement dans ce navigateur.</p>
     </footer>
 
-    <script src="js/config.js?v=5"></script>
-    <script src="js/auth.js?v=5"></script>
-    <script src="js/api.js?v=5"></script>
-    <script src="js/analysis.js?v=5"></script>
-    <script src="js/demo.js?v=5"></script>
-    <script src="js/app.js?v=5"></script>
+    <script src="js/config.js?v=6"></script>
+    <script src="js/auth.js?v=6"></script>
+    <script src="js/api.js?v=6"></script>
+    <script src="js/analysis.js?v=6"></script>
+    <script src="js/demo.js?v=6"></script>
+    <script src="js/ai-key.js?v=6"></script>
+    <script src="js/ai.js?v=6"></script>
+    <script src="js/app.js?v=6"></script>
   </body>
 </html>
