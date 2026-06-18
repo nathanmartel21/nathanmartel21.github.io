@@ -244,7 +244,7 @@
         'Authorization': `Bearer ${key}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': location.origin,
-        'X-Title': 'Strava Premium — Coach IA'
+        'X-Title': 'Strava Premium - Coach IA'
       },
       body: JSON.stringify({
         model: chosenModel(),
