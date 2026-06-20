@@ -592,58 +592,50 @@ a {
    Strava teaser
    ------------------------------------------------------------------ */
 
-.strava-teaser {
-  border: 1px solid rgba(252, 76, 2, 0.3);
-  background: linear-gradient(135deg, rgba(252, 76, 2, 0.08) 0%, var(--bg-card) 55%);
-  border-radius: var(--radius-lg);
-  padding: 2.25rem;
+.app-tiles {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.app-tile {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-}
-
-.strava-teaser .section-label {
-  color: var(--strava);
-}
-
-.strava-teaser h2 {
-  font-family: var(--font-display);
-  margin: 0 0 0.6rem;
-  font-size: 1.5rem;
-}
-
-.strava-teaser p {
-  color: var(--text-muted);
-  margin: 0;
-  max-width: 560px;
-}
-
-.garmin-teaser {
-  border: 1px solid rgba(0, 168, 232, 0.3);
-  background: linear-gradient(135deg, rgba(0, 168, 232, 0.08) 0%, var(--bg-card) 55%);
+  justify-content: center;
+  gap: 0.9rem;
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius-lg);
-  padding: 2.25rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.app-tile:hover { transform: translateY(-3px); }
+
+.app-tile-icon {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2rem;
-  align-items: center;
-  margin-top: 1.25rem;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  font-size: 1.9rem;
 }
 
-.garmin-teaser .section-label { color: var(--garmin); }
-
-.garmin-teaser h2 {
+.app-tile-name {
   font-family: var(--font-display);
-  margin: 0 0 0.6rem;
-  font-size: 1.5rem;
+  font-weight: 700;
+  font-size: 1.6rem;
 }
 
-.garmin-teaser p {
-  color: var(--text-muted);
-  margin: 0;
-  max-width: 560px;
-}
+.app-tile-strava .app-tile-icon { background: rgba(252, 76, 2, 0.14); }
+.app-tile-strava:hover { border-color: var(--strava); background: linear-gradient(135deg, rgba(252, 76, 2, 0.10) 0%, var(--bg-card) 60%); }
+.app-tile-strava .app-tile-name { color: var(--strava); }
+
+.app-tile-garmin .app-tile-icon { background: rgba(0, 168, 232, 0.14); }
+.app-tile-garmin:hover { border-color: var(--garmin); background: linear-gradient(135deg, rgba(0, 168, 232, 0.10) 0%, var(--bg-card) 60%); }
+.app-tile-garmin .app-tile-name { color: var(--garmin); }
 
 /* ------------------------------------------------------------------
    Contact
@@ -818,8 +810,7 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .strava-teaser,
-  .garmin-teaser {
+  .app-tiles {
     grid-template-columns: 1fr;
   }
 }

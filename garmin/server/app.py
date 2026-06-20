@@ -30,9 +30,10 @@ import json
 import os
 import time
 import uuid
+from collections import defaultdict
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -59,6 +60,40 @@ def _gc_pending() -> None:
     now = time.time()
     for k in [k for k, v in _MFA_PENDING.items() if now - v[2] > _MFA_TTL]:
         _MFA_PENDING.pop(k, None)
+
+
+# --------------------------------------------------------------------------- #
+# Per-IP rate limiting — the endpoints are public and unauthenticated, so this
+# stops abuse (spam / using the server as a Garmin-login relay). In-memory,
+# fixed-window. Tunable via env RL_MAX / RL_WINDOW.
+# --------------------------------------------------------------------------- #
+
+_RL_HITS: dict[str, list[float]] = defaultdict(list)
+_RL_MAX = int(os.environ.get("RL_MAX", "6"))          # login attempts...
+_RL_WINDOW = int(os.environ.get("RL_WINDOW", "600"))  # ...per this many seconds
+
+
+def _client_ip(request: Request) -> str:
+    # Behind HF/Render proxies the real client is in X-Forwarded-For.
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit(request: Request) -> None:
+    now = time.time()
+    # Opportunistic cleanup so the map can't grow unbounded.
+    if len(_RL_HITS) > 4096:
+        for ip in [ip for ip, ts in _RL_HITS.items() if not ts or now - ts[-1] > _RL_WINDOW]:
+            _RL_HITS.pop(ip, None)
+    ip = _client_ip(request)
+    hits = [t for t in _RL_HITS[ip] if now - t < _RL_WINDOW]
+    if len(hits) >= _RL_MAX:
+        retry = int(_RL_WINDOW - (now - hits[0])) // 60 + 1
+        raise HTTPException(status_code=429, detail=f"Trop de tentatives de connexion. Réessaie dans ~{retry} min.")
+    hits.append(now)
+    _RL_HITS[ip] = hits
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +156,8 @@ def root() -> dict:
 
 
 @app.post("/api/login")
-def login(body: LoginIn) -> dict:
+def login(body: LoginIn, request: Request) -> dict:
+    _rate_limit(request)
     _gc_pending()
     try:
         garmin = Garmin(email=body.email, password=body.password, return_on_mfa=True)
@@ -143,7 +179,8 @@ def login(body: LoginIn) -> dict:
 
 
 @app.post("/api/login/mfa")
-def login_mfa(body: MfaIn) -> dict:
+def login_mfa(body: MfaIn, request: Request) -> dict:
+    _rate_limit(request)
     _gc_pending()
     pending = _MFA_PENDING.pop(body.ticket, None)
     if not pending:
