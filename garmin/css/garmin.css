@@ -437,6 +437,17 @@ img { max-width: 100%; display: block; }
 .insight-chip[data-tone="warn"] { border-left-color: var(--yellow); }
 .insight-chip[data-tone="bad"] { border-left-color: var(--red); }
 
+/* ------------------------------------------------------------------ AI tips */
+.tips-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.8rem; }
+.tip-card {
+  background: linear-gradient(135deg, rgba(0, 168, 232, 0.10) 0%, var(--bg-card) 70%);
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); padding: 0.95rem 1.1rem; font-size: 0.92rem; line-height: 1.5;
+}
+.tip-card.tip-locked, .tip-card.tip-loading {
+  grid-column: 1 / -1; background: var(--bg-card); border-left-color: var(--border-strong); color: var(--text-faint);
+}
+
 /* ------------------------------------------------------------------ Load & risk */
 .load-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
 .acwr-card, .risk-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem 1.6rem; border-left: 4px solid var(--text-faint); }

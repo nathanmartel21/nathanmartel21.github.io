@@ -414,7 +414,9 @@ function suggestRun(runs, ref = new Date()) {
   const today = startOfDay(ref);
   const stats = periodStats(runs, ref);
   const last7 = sumStats(runs.filter(r => inLastDays(r, 7, ref)));
-  const weeklyAvg = Math.max(stats.prev28.km / 4, 5);
+  /* Baseline = recent 4-week weekly average (not 4–8 weeks ago), so a legit,
+     established ramp-up isn't mistaken for an acute spike. */
+  const weeklyAvg = Math.max(stats.last28.km / 4, 5);
   const lastRun = runs[0];
   const daysSince = Math.round((today - startOfDay(new Date(lastRun.date))) / 86400000);
   const avgDist = stats.last28.count ? stats.last28.km / stats.last28.count : last7.km / Math.max(last7.count, 1) || 6;
@@ -537,6 +539,13 @@ function buildRecommendation(runs, wellness, snapshot, ref = new Date()) {
   let recovery;
   if (signals.length) recovery = Math.round(signals.reduce((s, v) => s + v, 0) / signals.length);
   else recovery = Math.max(0, Math.min(100, Math.round(60 + fit.form * 2)));
+
+  /* Acute training load also gates the verdict: even with great recovery, a
+     load spike means "don't pile on more" — keeps this in sync with the
+     rule-based session suggestion (suggestRun). */
+  const load = acwr(runs, ref);
+  if (load && load.ratio > 1.5) { recovery = Math.min(recovery, 38); factors.push(`Charge en pic (ACWR ${load.ratio.toFixed(2)})`); }
+  else if (load && load.ratio > 1.3) { recovery = Math.min(recovery, 55); factors.push(`Charge en hausse (ACWR ${load.ratio.toFixed(2)})`); }
 
   let level, title, desc;
   if (recovery >= 70) {

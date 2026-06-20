@@ -212,13 +212,15 @@
 
   /* ---------------- OpenRouter streaming ---------------- */
 
-  async function streamChat(messages, onToken, signal) {
+  async function streamChat(messages, onToken, signal, opts = {}) {
     const key = activeKey();
     if (!key) throw new Error('NO_KEY');
+    const body = { model: chosenModel(), messages, stream: true, temperature: opts.temperature ?? 0.4 };
+    if (opts.maxTokens) body.max_tokens = opts.maxTokens;
     const res = await fetch(OR_ENDPOINT, {
       method: 'POST', signal,
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': location.origin, 'X-Title': 'Garmin Premium - Coach IA' },
-      body: JSON.stringify({ model: chosenModel(), messages, stream: true, temperature: 0.4 })
+      body: JSON.stringify(body)
     });
     if (!res.ok) {
       let detail = '';
@@ -338,7 +340,7 @@
       try {
         const key = await decryptKey(window.AI_KEY_BLOB, pass);
         if (!/^sk-or-/.test(key)) throw new Error('bad');
-        setSessionKey(key); msg.textContent = ''; $('ai-pass-input').value = ''; hideKeyGate();
+        setSessionKey(key); msg.textContent = ''; $('ai-pass-input').value = ''; hideKeyGate(); generateTips(false);
       } catch { msg.textContent = '❌ Mot de passe incorrect.'; }
     }
 
@@ -346,7 +348,7 @@
       const key = $('ai-own-key-input').value.trim();
       const msg = $('ai-key-msg');
       if (!/^sk-or-/.test(key)) { msg.textContent = 'Clé OpenRouter invalide (commence par sk-or-…).'; return; }
-      setDeviceKey(key); $('ai-own-key-input').value = ''; msg.textContent = ''; hideKeyGate();
+      setDeviceKey(key); $('ai-own-key-input').value = ''; msg.textContent = ''; hideKeyGate(); generateTips(false);
     }
 
     /* ---- One-shot AI briefing (proactive analysis, not the chat) ---- */
@@ -396,6 +398,58 @@
       }
     }
 
+    /* ---- Lightweight "tips of the day" (short punchy one-liners) ---- */
+    function tipsKey() {
+      const id = (typeof getActiveId === 'function' && getActiveId()) || 'default';
+      return `garmin_ai_tips_${id}_${new Date().toISOString().slice(0, 10)}`;
+    }
+
+    const TIPS_PROMPT = [
+      "Donne EXACTEMENT 4 tips ultra-courts (max 12 mots chacun), concrets et personnalisés à mes données du moment",
+      "(récupération, charge/ACWR, sommeil, stress, HRV, corrélations perso).",
+      "Style punchy et stylé, comme un coach qui te glisse un conseil. UNE ligne par tip, commençant par un emoji pertinent.",
+      "Aucune intro, aucune conclusion, aucun titre — juste les 4 lignes."
+    ].join(' ');
+
+    function parseTips(text) {
+      return text.split('\n').map(l => l.trim())
+        .filter(Boolean)
+        .map(l => l.replace(/^[-*\d.)\s]+/, '').trim())
+        .filter(l => l.length > 2)
+        .slice(0, 4);
+    }
+
+    function renderTips(tips) {
+      const wrap = $('ai-tips');
+      if (!wrap) return;
+      wrap.innerHTML = tips.map(t => `<div class="tip-card">${escapeHtml(t)}</div>`).join('');
+    }
+
+    async function generateTips(force) {
+      const wrap = $('ai-tips');
+      if (!wrap) return;
+      const cached = localStorage.getItem(tipsKey());
+      if (cached && !force) { try { renderTips(JSON.parse(cached)); return; } catch {} }
+      if (!activeKey()) {
+        wrap.innerHTML = '<div class="tip-card tip-locked">🔒 Déverrouille le coach IA (plus bas) pour tes tips du jour.</div>';
+        return;
+      }
+      wrap.innerHTML = '<div class="tip-card tip-loading"><span class="ai-cursor">▍</span> génération de tes tips…</div>';
+      const ctrl = new AbortController();
+      try {
+        const full = await streamChat(
+          [{ role: 'system', content: systemPrompt(summary) }, { role: 'user', content: TIPS_PROMPT }],
+          () => {}, ctrl.signal, { maxTokens: 240, temperature: 0.7 }
+        );
+        const tips = parseTips(full);
+        if (tips.length) { renderTips(tips); try { localStorage.setItem(tipsKey(), JSON.stringify(tips)); } catch {} }
+        else wrap.innerHTML = '<div class="tip-card tip-locked">Pas de tips cette fois — réessaie.</div>';
+      } catch (err) {
+        if (err.message === 'NO_KEY') wrap.innerHTML = '<div class="tip-card tip-locked">🔒 Déverrouille le coach IA pour tes tips.</div>';
+        else wrap.innerHTML = `<div class="tip-card tip-locked">⚠️ ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
     function readPlanForm() {
       return { objective: $('ai-plan-objective').value, raceKm: $('ai-plan-km').value.trim(), targetTime: $('ai-plan-time').value.trim(), weeks: $('ai-plan-weeks').value.trim(), sessions: $('ai-plan-sessions').value.trim(), notes: $('ai-plan-notes').value.trim() };
     }
@@ -432,6 +486,11 @@
         if (cached) $('ai-briefing-output').innerHTML = renderMarkdown(cached);
         briefingBtn.addEventListener('click', generateBriefing);
       }
+
+      // Lightweight tips of the day: cached → render; else auto-generate once if unlocked
+      const tipsRefresh = $('ai-tips-refresh');
+      if (tipsRefresh) tipsRefresh.addEventListener('click', () => generateTips(true));
+      generateTips(false);
 
       if (activeKey()) hideKeyGate(); else showKeyGate();
     }
