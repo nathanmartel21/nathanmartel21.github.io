@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard — Garmin Premium</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/garmin.css?v=2" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a class="app-brand" href="index.html">
+          <span class="bolt">⌚</span>
+          Garmin
+          <span class="premium">Premium</span>
+        </a>
+        <div class="topbar-actions">
+          <span class="demo-badge" id="demo-badge" hidden>MODE DÉMO</span>
+          <span class="profile-switcher" id="profile-switcher">
+            <img id="profile-avatar" alt="" hidden />
+            <select id="profile-select" aria-label="Changer d’athlète"></select>
+          </span>
+          <a class="btn btn-ghost btn-sm" href="index.html?add=1" title="Connecter un autre compte Garmin">+ Athlète</a>
+          <button class="btn btn-ghost btn-sm" id="refresh-btn">↻ Synchroniser</button>
+          <button class="btn btn-ghost btn-sm" id="logout-btn">Déconnexion</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container dash-main">
+      <div class="loader show" id="loader">
+        <div class="spinner"></div>
+        <p id="loader-msg">Chargement…</p>
+      </div>
+
+      <div class="status-msg" id="dash-status"></div>
+
+      <div class="dash-content" id="dash-content">
+        <!-- AI recommendation of the day -->
+        <section class="dash-section">
+          <div class="reco-card" id="reco-card" data-level="steady">
+            <div class="reco-ring" id="reco-ring">
+              <div class="reco-ring-inner">
+                <span class="reco-ring-score" id="reco-score">–</span>
+                <span class="reco-ring-label">récup</span>
+              </div>
+            </div>
+            <div>
+              <p class="reco-label">🤖 Recommandation du jour</p>
+              <h2 class="reco-title" id="reco-title">…</h2>
+              <p class="reco-desc" id="reco-desc"></p>
+              <div class="reco-factors" id="reco-factors"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Auto-detected signals -->
+        <section class="dash-section" id="insights-section">
+          <h2 class="dash-section-title">Signaux du jour <span class="hint">détectés automatiquement dans tes données</span></h2>
+          <div class="insights-list" id="insights-list"></div>
+        </section>
+
+        <!-- Key Garmin metrics -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Métriques clés <span class="hint">ton état Garmin en un coup d’œil</span></h2>
+          <div class="metric-grid" id="metric-grid"></div>
+        </section>
+
+        <!-- Run of the day -->
+        <section class="dash-section">
+          <div class="suggestion-card" id="suggestion-card">
+            <div>
+              <p class="suggestion-label">🎯 Séance du jour — suggestion</p>
+              <h2 class="suggestion-title" id="sug-title"></h2>
+              <p class="suggestion-desc" id="sug-desc"></p>
+              <div class="suggestion-meta">
+                <span class="pill"><span class="pill-label">Distance</span><span id="sug-distance"></span></span>
+                <span class="pill"><span class="pill-label">Allure</span><span id="sug-pace"></span></span>
+                <span class="pill"><span class="pill-label">Pourquoi</span><span id="sug-reason"></span></span>
+              </div>
+            </div>
+            <div class="suggestion-type" id="sug-type"></div>
+          </div>
+        </section>
+
+        <!-- Training program -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Programme d’entraînement <span class="hint">généré selon ta forme actuelle</span></h2>
+          <div class="plan-card">
+            <div class="plan-controls">
+              <div class="plan-field">
+                <label for="plan-objective">Objectif</label>
+                <select id="plan-objective"></select>
+              </div>
+              <div class="plan-field" id="plan-customkm-field" hidden>
+                <label for="plan-race-km">Distance (km)</label>
+                <input id="plan-race-km" type="number" min="1" max="200" step="0.1" placeholder="ex. 15" />
+              </div>
+              <div class="plan-field" id="plan-time-field" hidden>
+                <label for="plan-target-time">Temps visé</label>
+                <input id="plan-target-time" type="text" inputmode="numeric" placeholder="hh:mm:ss" />
+              </div>
+              <div class="plan-field" id="plan-weeks-field" hidden>
+                <label for="plan-weeks">Course dans</label>
+                <div class="weeks-input">
+                  <input id="plan-weeks" type="number" min="1" max="52" step="1" placeholder="8" />
+                  <span>sem.</span>
+                </div>
+              </div>
+              <div class="plan-field">
+                <label>Séances / semaine</label>
+                <div class="stepper">
+                  <button type="button" id="plan-minus" aria-label="Moins">−</button>
+                  <span id="plan-sessions-val">4</span>
+                  <button type="button" id="plan-plus" aria-label="Plus">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="plan-race-summary" id="plan-race-summary" hidden>
+              <div class="plan-pace-box">
+                <span class="plan-pace-label">Allure cible</span>
+                <span class="plan-pace-value" id="plan-race-pace">–</span>
+              </div>
+              <div class="plan-feasibility" id="plan-feasibility" data-tone="good">
+                <span class="plan-feas-label" id="plan-feas-label">–</span>
+                <span class="plan-feas-detail" id="plan-feas-detail"></span>
+              </div>
+            </div>
+
+            <p class="plan-volume-note"><strong id="plan-weekly-km">0</strong> km planifiés / semaine</p>
+            <div class="plan-sessions" id="plan-sessions"></div>
+          </div>
+        </section>
+
+        <!-- AI coach -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Coach IA <span class="hint">plan personnalisé à partir de toutes tes données</span></h2>
+          <div class="ai-card">
+            <div class="ai-gate" id="ai-key-gate" hidden>
+              <p class="ai-gate-title">🔐 Débloquer le coach IA</p>
+              <div id="ai-pass-row">
+                <label for="ai-pass-input">Mot de passe (déchiffre la clé OpenRouter)</label>
+                <div class="ai-gate-row">
+                  <input id="ai-pass-input" type="password" placeholder="ta passphrase" autocomplete="off" />
+                  <button class="btn btn-accent btn-sm" id="ai-unlock-btn">Débloquer</button>
+                </div>
+              </div>
+              <div id="ai-ownkey-block">
+                <p class="ai-gate-or" id="ai-pass-or">— ou —</p>
+                <label for="ai-own-key-input">Utiliser ta propre clé OpenRouter (stockée sur ce navigateur)</label>
+                <div class="ai-gate-row">
+                  <input id="ai-own-key-input" type="password" placeholder="sk-or-v1-…" autocomplete="off" />
+                  <button class="btn btn-ghost btn-sm" id="ai-own-key-btn">Enregistrer</button>
+                </div>
+                <p class="ai-gate-hint">
+                  Pas de clé ? Crée-en une gratuite sur <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.
+                </p>
+              </div>
+              <p class="ai-key-msg" id="ai-key-msg"></p>
+            </div>
+
+            <div id="ai-main">
+              <div class="ai-toolbar">
+                <div class="ai-toolbar-left">
+                  <label for="ai-model">Modèle</label>
+                  <select id="ai-model"></select>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="ai-forget-key" title="Oublier la clé sur ce navigateur">Oublier la clé</button>
+              </div>
+
+              <div class="ai-briefing">
+                <div class="ai-briefing-head">
+                  <div>
+                    <p class="ai-plan-title">🧠 Bilan IA personnalisé</p>
+                    <p class="ai-briefing-sub">Analyse complète : forme, récupération, charge (ACWR), corrélations de tes données + plan des 7 prochains jours.</p>
+                  </div>
+                  <button class="btn btn-accent btn-sm" id="ai-briefing-btn">✨ Générer mon bilan</button>
+                </div>
+                <div class="ai-briefing-output" id="ai-briefing-output"></div>
+              </div>
+
+              <div class="ai-plan-form">
+                <p class="ai-plan-title">Générer un plan</p>
+                <div class="ai-plan-grid">
+                  <div class="plan-field">
+                    <label for="ai-plan-objective">Objectif</label>
+                    <select id="ai-plan-objective">
+                      <option value="préparer une course">Préparer une course</option>
+                      <option value="progresser en endurance">Progresser en endurance</option>
+                      <option value="reprise après coupure">Reprise après coupure</option>
+                      <option value="garder la forme">Garder la forme</option>
+                    </select>
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-km">Distance (km)</label>
+                    <input id="ai-plan-km" type="number" min="1" max="200" step="0.1" placeholder="ex. 42.2" />
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-time">Temps visé</label>
+                    <input id="ai-plan-time" type="text" placeholder="ex. 2:59:00" />
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-weeks">Semaines dispo</label>
+                    <input id="ai-plan-weeks" type="number" min="1" max="52" step="1" placeholder="ex. 16" />
+                  </div>
+                  <div class="plan-field">
+                    <label for="ai-plan-sessions">Séances / sem.</label>
+                    <input id="ai-plan-sessions" type="number" min="1" max="7" step="1" placeholder="ex. 4" />
+                  </div>
+                  <div class="plan-field ai-plan-notes-field">
+                    <label for="ai-plan-notes">Remarques (optionnel)</label>
+                    <input id="ai-plan-notes" type="text" placeholder="blessure, terrain, dispo…" />
+                  </div>
+                </div>
+                <button class="btn btn-accent" id="ai-plan-generate">✨ Générer mon plan</button>
+              </div>
+
+              <div class="ai-chat">
+                <div class="ai-chat-head">
+                  <span>💬 Discuter avec le coach</span>
+                  <button class="btn btn-ghost btn-sm" id="ai-clear-chat">Effacer</button>
+                </div>
+                <div class="ai-chat-log" id="ai-chat-log"></div>
+                <div class="ai-chat-input">
+                  <textarea id="ai-input" rows="1" placeholder="Ex. « Vu ma readiness et mon sommeil, je fais quoi cette semaine ? »"></textarea>
+                  <button class="btn btn-ghost btn-sm" id="ai-stop" hidden>■ Stop</button>
+                  <button class="btn btn-accent btn-sm" id="ai-send">Envoyer</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Fitness condition -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Condition physique <span class="hint">forme / fatigue / fraîcheur (modèle CTL-ATL-TSB)</span></h2>
+          <div class="condition-card" id="condition-card" data-tone="ok">
+            <div class="condition-gauge">
+              <span class="condition-score" id="cond-score">–</span>
+              <span class="condition-score-label">indice de forme</span>
+            </div>
+            <div class="condition-body">
+              <span class="condition-status" id="cond-label">…</span>
+              <p class="condition-advice" id="cond-advice"></p>
+              <div class="suggestion-meta">
+                <span class="pill"><span class="pill-label">Fraîcheur</span><span id="cond-form"></span></span>
+                <span class="pill"><span class="pill-label">Tendance 30 j</span><span id="cond-trend"></span></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Training load & overtraining risk -->
+        <section class="dash-section" id="load-section">
+          <h2 class="dash-section-title">Charge & risque <span class="hint">ACWR + modèle de surentraînement</span></h2>
+          <div class="load-grid">
+            <div class="acwr-card" id="acwr-card" data-tone="good">
+              <div class="acwr-gauge">
+                <span class="acwr-ratio" id="acwr-ratio">–</span>
+                <span class="acwr-gauge-label">ACWR</span>
+              </div>
+              <div>
+                <span class="acwr-zone" id="acwr-zone">…</span>
+                <p class="acwr-advice" id="acwr-advice"></p>
+                <div class="suggestion-meta">
+                  <span class="pill"><span class="pill-label">Charge 7 j</span><span id="acwr-acute">–</span></span>
+                  <span class="pill"><span class="pill-label">Moy. hebdo (28 j)</span><span id="acwr-chronic">–</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="risk-card" id="risk-card" data-tone="good">
+              <div class="risk-head">
+                <div class="risk-gauge"><span class="risk-score" id="risk-score">–</span><span class="risk-gauge-label">risque</span></div>
+                <div><span class="risk-level" id="risk-level">…</span><p class="risk-caption">indice de surentraînement (0–100)</p></div>
+              </div>
+              <ul class="risk-factors" id="risk-factors"></ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- Sleep & recovery -->
+        <section class="dash-section" id="recovery-section">
+          <h2 class="dash-section-title">Sommeil & récupération <span class="hint">l’autre moitié de la performance</span></h2>
+          <div class="charts-grid">
+            <div class="chart-card wide">
+              <div class="chart-head"><div><h3>Phases de sommeil</h3><p class="chart-sub">Profond · léger · paradoxal · éveil (heures / nuit)</p></div><div class="range-toggle" id="range-sleep"></div></div>
+              <div class="chart-wrap"><canvas id="sleep-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>Score de sommeil</h3><p class="chart-sub">Qualité de sommeil Garmin (/100)</p></div><div class="range-toggle" id="range-sleepscore"></div></div>
+              <div class="chart-wrap"><canvas id="sleepscore-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>FC de repos</h3><p class="chart-sub">Plus c’est bas, mieux tu récupères (bpm)</p></div><div class="range-toggle" id="range-rhr"></div></div>
+              <div class="chart-wrap"><canvas id="rhr-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>Body Battery</h3><p class="chart-sub">Niveau d’énergie max / min par jour</p></div><div class="range-toggle" id="range-battery"></div></div>
+              <div class="chart-wrap"><canvas id="battery-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>Stress moyen</h3><p class="chart-sub">Niveau de stress journalier (/100)</p></div><div class="range-toggle" id="range-stress"></div></div>
+              <div class="chart-wrap"><canvas id="stress-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>HRV (variabilité cardiaque)</h3><p class="chart-sub">Moyenne nuit / semaine (ms)</p></div><div class="range-toggle" id="range-hrv"></div></div>
+              <div class="chart-wrap"><canvas id="hrv-chart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Correlations -->
+        <section class="dash-section" id="corr-section">
+          <h2 class="dash-section-title">Corrélations dans tes données <span class="hint">ce qui influence vraiment ta forme</span></h2>
+          <div class="corr-grid" id="corr-grid"></div>
+        </section>
+
+        <!-- KPIs -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Vue d’ensemble <span class="hint">course à pied uniquement</span></h2>
+          <div class="kpi-grid" id="kpi-grid"></div>
+        </section>
+
+        <!-- Progression -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Progression</h2>
+          <div class="charts-grid">
+            <div class="chart-card wide">
+              <div class="chart-head"><div><h3>Volume hebdomadaire</h3><p class="chart-sub">Kilomètres par semaine</p></div><div class="range-toggle" id="range-weekly"></div></div>
+              <div class="chart-wrap"><canvas id="weekly-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>Condition physique</h3><p class="chart-sub">Forme (CTL) · Fatigue (ATL) · Fraîcheur (TSB)</p></div><div class="range-toggle" id="range-fitness"></div></div>
+              <div class="chart-wrap"><canvas id="fitness-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>Tendance d’allure</h3><p class="chart-sub">Allure par sortie + moyenne glissante</p></div><div class="range-toggle" id="range-pace"></div></div>
+              <div class="chart-wrap"><canvas id="pace-chart"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-head"><div><h3>VO2max</h3><p class="chart-sub">Estimation par sortie (course)</p></div><div class="range-toggle" id="range-vo2"></div></div>
+              <div class="chart-wrap"><canvas id="vo2-chart"></canvas></div>
+            </div>
+            <div class="chart-card wide">
+              <div class="chart-head"><div><h3>Calendrier d’activité</h3><p class="chart-sub">Plus c’est bleu, plus tu as couru</p></div><div class="range-toggle" id="range-heatmap"></div></div>
+              <div class="heatmap-scroll"><div class="heatmap" id="heatmap"></div></div>
+              <div class="heatmap-legend">moins <span class="cell"></span><span class="cell l1"></span><span class="cell l2"></span><span class="cell l3"></span><span class="cell l4"></span> plus</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Advanced -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Analyse détaillée <span class="hint">tirée de toutes tes données Garmin</span></h2>
+          <div class="charts-grid">
+            <div class="chart-card"><div class="chart-head"><div><h3>Zones d’allure</h3><p class="chart-sub">Temps passé par intensité</p></div><div class="range-toggle" id="range-zones"></div></div><div class="chart-wrap"><canvas id="zones-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Répartition multisport</h3><p class="chart-sub">Temps par sport</p></div><div class="range-toggle" id="range-sport"></div></div><div class="chart-wrap"><canvas id="sport-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Efficience aérobie</h3><p class="chart-sub">Mètres par battement (↑ = progrès)</p></div><div class="range-toggle" id="range-eff"></div></div><div class="chart-wrap"><canvas id="eff-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>FC vs allure</h3><p class="chart-sub">Ta signature cardio par sortie</p></div><div class="range-toggle" id="range-hrpace"></div></div><div class="chart-wrap"><canvas id="hrpace-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Cadence</h3><p class="chart-sub">Pas par minute + moyenne glissante</p></div><div class="range-toggle" id="range-cadence"></div></div><div class="chart-wrap"><canvas id="cadence-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Charge d’entraînement</h3><p class="chart-sub">Charge Garmin par semaine</p></div><div class="range-toggle" id="range-effort"></div></div><div class="chart-wrap"><canvas id="effort-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Distribution des distances</h3><p class="chart-sub">Nombre de sorties par tranche</p></div><div class="range-toggle" id="range-distrib"></div></div><div class="chart-wrap"><canvas id="distrib-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Quand cours-tu ?</h3><p class="chart-sub">Volume par jour de la semaine</p></div><div class="range-toggle" id="range-weekday"></div></div><div class="chart-wrap"><canvas id="weekday-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Dénivelé positif</h3><p class="chart-sub">Mètres de D+ par mois</p></div><div class="range-toggle" id="range-elev"></div></div><div class="chart-wrap"><canvas id="elev-chart"></canvas></div></div>
+            <div class="chart-card"><div class="chart-head"><div><h3>Minutes intensives</h3><p class="chart-sub">Minutes d’intensité Garmin par semaine</p></div><div class="range-toggle" id="range-intensity"></div></div><div class="chart-wrap"><canvas id="intensity-chart"></canvas></div></div>
+          </div>
+        </section>
+
+        <!-- Records -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Records personnels</h2>
+          <div class="records-grid" id="records-grid"></div>
+        </section>
+
+        <!-- Weekly goal -->
+        <section class="dash-section">
+          <div class="goal-card">
+            <div class="goal-head">
+              <h3>🎯 Objectif hebdomadaire</h3>
+              <div class="goal-edit"><input id="goal-input" type="number" min="1" max="300" step="1" /><span>km / semaine</span></div>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="goal-fill" style="width: 0%"></div></div>
+            <p class="goal-status" id="goal-status"></p>
+          </div>
+        </section>
+
+        <!-- Activities -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Dernières activités</h2>
+          <div class="activities-table-wrap">
+            <table class="activities-table">
+              <thead><tr><th>Date</th><th>Activité</th><th>Type</th><th>Distance</th><th>Durée</th><th>Allure</th><th>D+</th><th>FC moy.</th><th>VO2max</th></tr></thead>
+              <tbody id="activities-body"></tbody>
+            </table>
+          </div>
+          <div style="display:flex; justify-content:center; margin-top:1.25rem;">
+            <button class="btn btn-ghost btn-sm" id="more-activities-btn" hidden>Afficher plus</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <p>App personnelle de Nathan Martel — données via Garmin Connect, stockées uniquement dans ce navigateur.</p>
+    </footer>
+
+    <script src="js/config.js?v=2"></script>
+    <script src="js/api.js?v=2"></script>
+    <script src="js/import.js?v=2"></script>
+    <script src="js/analysis.js?v=2"></script>
+    <script src="js/demo.js?v=2"></script>
+    <script src="js/ai-key.js?v=2"></script>
+    <script src="js/ai.js?v=2"></script>
+    <script src="js/app.js?v=2"></script>
+  </body>
+</html>

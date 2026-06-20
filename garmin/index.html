@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Garmin Premium — Nathan Martel</title>
+    <meta name="description" content="Dashboard d'entraînement et de récupération construit sur Garmin Connect : activités, sommeil, stress, Body Battery, VO2max, readiness, plan d'entraînement et coach IA." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/garmin.css?v=2" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a class="app-brand" href="index.html">
+          <span class="bolt">⌚</span>
+          Garmin
+          <span class="premium">Premium</span>
+        </a>
+        <div class="topbar-actions">
+          <a class="back-link" href="../index.html">&larr; retour au portfolio</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container auth-main">
+      <section class="auth-hero">
+        <p class="eyebrow">// dashboard entraînement & récupération</p>
+        <h1>Toutes tes données Garmin, <span class="accent">analysées par IA</span>.</h1>
+        <p>
+          Une application personnelle construite sur Garmin Connect : activités, sommeil, stress,
+          Body Battery, VO2max, Training Readiness… croisés pour une recommandation quotidienne,
+          un plan d'entraînement et un coach IA qui raisonne aussi sur ta récupération.
+        </p>
+      </section>
+
+      <section class="features-grid">
+        <div class="feature-card">
+          <span class="icon">🤖</span>
+          <h3>Reco du jour par IA</h3>
+          <p>Un moteur qui fusionne ta Training Readiness, ton Body Battery, ton sommeil et ta charge pour te dire : feu vert, séance modérée ou récupération.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">😴</span>
+          <h3>Sommeil & récupération</h3>
+          <p>Phases de sommeil, score, fréquence respiratoire, FC de repos et statut HRV — l'autre moitié de la performance.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">🔋</span>
+          <h3>Stress & Body Battery</h3>
+          <p>Suis ta recharge et ta décharge d'énergie au fil des jours, et ton niveau de stress moyen.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon">🧠</span>
+          <h3>Coach IA personnalisé</h3>
+          <p>Plan d'entraînement et discussion : l'IA lit toutes tes données (course + récupération) avant de répondre.</p>
+        </div>
+      </section>
+
+      <section class="auth-panel" id="auth-panel">
+        <div class="status-msg" id="status-msg"></div>
+
+        <!-- State 1: backend URL not configured -->
+        <div id="setup-view" hidden>
+          <h2>Configuration (une seule fois)</h2>
+          <p>
+            Garmin n'a pas d'API navigateur : un petit serveur relais récupère tes données. Il est
+            <strong>sans état</strong> — il ne stocke jamais ton mot de passe. Déploie-le en 5 min
+            (gratuit) puis colle son URL ici.
+          </p>
+          <ol class="setup-steps">
+            <li>Suis le guide <code>garmin/server/README.md</code> du dépôt pour déployer le relais sur <strong>Hugging Face Spaces</strong> (gratuit, sans carte).</li>
+            <li>Copie l'URL obtenue (ex. <code>https://nathan-garmin.hf.space</code>) ci-dessous.</li>
+          </ol>
+
+          <div class="field">
+            <label for="backend-url">URL DU SERVEUR RELAIS</label>
+            <input id="backend-url" type="url" placeholder="https://ton-espace.hf.space" autocomplete="off" />
+            <p class="field-hint">Stockée uniquement dans ce navigateur. Modifiable à tout moment.</p>
+          </div>
+
+          <div class="auth-actions">
+            <button class="btn btn-accent btn-big" id="save-backend-btn">Enregistrer & continuer</button>
+          </div>
+
+          <div class="auth-divider">ou, sans serveur</div>
+          <div class="auth-actions">
+            <button class="btn btn-ghost" id="import-btn-setup">📁 Importer un export local (garmin-data.json)</button>
+            <button class="btn btn-ghost" id="demo-btn-setup">Essayer en mode démo (données fictives)</button>
+          </div>
+        </div>
+
+        <!-- State 2: ready to connect a Garmin account -->
+        <div id="connect-view" hidden>
+          <h2 id="connect-title">Connecte ton compte Garmin</h2>
+          <p id="connect-intro">Tes identifiants servent une seule fois à obtenir une session ; le mot de passe n'est jamais stocké.</p>
+
+          <div class="info-tip" id="brother-tip" hidden>
+            👬 <strong>Pour connecter ton frère :</strong> entre <em>ses</em> identifiants Garmin — il aura son propre dashboard, basculable depuis le menu en haut.
+          </div>
+
+          <div class="field">
+            <label for="garmin-email">EMAIL GARMIN</label>
+            <input id="garmin-email" type="email" placeholder="ton.email@exemple.com" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="garmin-password">MOT DE PASSE GARMIN</label>
+            <input id="garmin-password" type="password" placeholder="••••••••" autocomplete="off" />
+          </div>
+
+          <!-- MFA, shown only if Garmin asks -->
+          <div class="field" id="mfa-field" hidden>
+            <label for="mfa-code">CODE DE VÉRIFICATION (MFA)</label>
+            <input id="mfa-code" type="text" inputmode="numeric" placeholder="ex. 123456" autocomplete="off" />
+            <p class="field-hint">Garmin a demandé un code à 2 facteurs (envoyé par e-mail / appli).</p>
+          </div>
+
+          <div class="auth-actions">
+            <button class="btn btn-accent btn-big" id="connect-btn">Se connecter à Garmin</button>
+            <button class="btn btn-accent btn-big" id="mfa-btn" hidden>Valider le code</button>
+            <button class="btn btn-ghost btn-sm" id="reset-backend-btn">Modifier l'URL du serveur</button>
+          </div>
+
+          <div class="login-busy" id="login-busy" hidden>
+            <span class="spinner"></span>
+            <span id="login-busy-msg">Connexion à Garmin…</span>
+          </div>
+
+          <p class="privacy-note">
+            🔒 Le serveur relais est <strong>sans état</strong> : ton mot de passe l'utilise une fois pour
+            obtenir un jeton de session, puis il est oublié. Le jeton reste dans <strong>ce navigateur</strong>.
+          </p>
+
+          <div class="auth-divider">ou</div>
+          <div class="auth-actions">
+            <button class="btn btn-ghost" id="import-btn-connect">📁 Importer un export local</button>
+            <button class="btn btn-ghost btn-sm" id="demo-btn-connect">Essayer en mode démo</button>
+          </div>
+        </div>
+
+        <!-- State 3: one or more athletes connected -->
+        <div id="connected-view" hidden>
+          <h2>Athlètes connectés</h2>
+          <p>Choisis un profil pour ouvrir son dashboard, ou ajoute un autre athlète (ton frère par exemple).</p>
+          <div class="profiles-list" id="profiles-list"></div>
+          <div class="auth-actions">
+            <button class="btn btn-ghost" id="add-athlete-btn">+ Connecter un autre compte Garmin</button>
+            <button class="btn btn-ghost" id="import-btn-connected">📁 Importer un export local</button>
+          </div>
+        </div>
+
+        <!-- State 4: import a local garmin-data.json -->
+        <div id="import-view" hidden>
+          <h2 id="import-title">Importer un export local</h2>
+          <p>Gratuit, sans serveur. Lance <code>python garmin/server/export_local.py</code> sur ta machine, puis dépose le <code>garmin-data.json</code> obtenu.</p>
+          <details class="import-help">
+            <summary>⌚ Comment générer le fichier</summary>
+            <ol class="setup-steps">
+              <li><code>cd garmin/server && pip install -r requirements.txt</code></li>
+              <li><code>python export_local.py --days 120</code> (te demande tes identifiants Garmin, en local uniquement).</li>
+              <li>Dépose le <code>garmin-data.json</code> créé ci-dessous.</li>
+            </ol>
+          </details>
+          <p class="import-sync-note">
+            🔄 Pour « synchroniser » : relance le script et réimporte dans le même profil — seules les nouvelles données s'ajoutent.
+          </p>
+
+          <div class="field" id="import-name-field">
+            <label for="import-name">NOM DU PROFIL</label>
+            <input id="import-name" type="text" placeholder="ex. Nathan, Baptiste..." autocomplete="off" />
+          </div>
+
+          <label class="dropzone" id="dropzone">
+            <input id="json-file" type="file" accept=".json,application/json" hidden />
+            <span class="dropzone-icon">📄</span>
+            <span id="dropzone-label">Clique ou dépose <code>garmin-data.json</code> ici</span>
+          </label>
+
+          <div class="auth-actions">
+            <button class="btn btn-accent btn-big" id="import-save-btn" disabled>Importer</button>
+            <button class="btn btn-ghost btn-sm" id="import-cancel-btn">Annuler</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>App personnelle de Nathan Martel — données via Garmin Connect, traitées dans ce navigateur. Non affiliée à Garmin Ltd.</p>
+    </footer>
+
+    <script src="js/config.js?v=2"></script>
+    <script src="js/api.js?v=2"></script>
+    <script src="js/import.js?v=2"></script>
+    <script>
+      const views = ['setup-view', 'connect-view', 'connected-view', 'import-view'];
+      let addingAthlete = false;
+      let mfaTicket = null;
+      let stagedData = null;
+      let importTargetId = null;
+
+      function showView(id) { views.forEach(v => { document.getElementById(v).hidden = v !== id; }); }
+      function showStatus(kind, text) {
+        const el = document.getElementById('status-msg');
+        el.className = `status-msg show ${kind}`;
+        el.textContent = text;
+      }
+      function clearStatus() { document.getElementById('status-msg').className = 'status-msg'; }
+
+      function startDemo() { ensureDemoProfile(); window.location.href = 'app.html'; }
+
+      function showConnectView(forAdding) {
+        addingAthlete = Boolean(forAdding);
+        mfaTicket = null;
+        document.getElementById('mfa-field').hidden = true;
+        document.getElementById('mfa-btn').hidden = true;
+        document.getElementById('connect-btn').hidden = false;
+        document.getElementById('login-busy').hidden = true;
+        document.getElementById('garmin-password').value = '';
+        document.getElementById('mfa-code').value = '';
+        document.getElementById('connect-title').textContent =
+          forAdding ? 'Connecter un autre compte Garmin' : 'Connecte ton compte Garmin';
+        document.getElementById('brother-tip').hidden = !forAdding;
+        showView('connect-view');
+      }
+
+      function renderProfilesList() {
+        const list = document.getElementById('profiles-list');
+        const profiles = getProfiles();
+        const icon = p => (p.source === 'demo' ? '🧪' : p.source === 'import' ? '📁' : '⌚');
+        list.innerHTML = profiles.map(p => `
+          <div class="profile-row">
+            <div class="profile-row-main" data-open="${p.id}">
+              <span class="profile-dot">${icon(p)}</span>
+              <span class="profile-row-name">${p.name || 'Athlète'}</span>
+              ${p.source === 'demo' ? '<span class="profile-tag">démo</span>' : ''}
+              ${p.source === 'import' ? '<span class="profile-tag">import</span>' : ''}
+            </div>
+            <button class="profile-remove" data-remove="${p.id}" title="Déconnecter ce profil">✕</button>
+          </div>`).join('');
+
+        list.querySelectorAll('[data-open]').forEach(el => {
+          el.addEventListener('click', () => { setActiveId(el.getAttribute('data-open')); window.location.href = 'app.html'; });
+        });
+        list.querySelectorAll('[data-remove]').forEach(el => {
+          el.addEventListener('click', () => {
+            const id = el.getAttribute('data-remove');
+            const profile = getProfile(id);
+            if (confirm(`Déconnecter « ${profile ? profile.name : 'ce profil'} » ? Ses données mises en cache seront effacées.`)) {
+              removeProfile(id); route();
+            }
+          });
+        });
+      }
+
+      /* ---- Login flow ---- */
+
+      function setLoginBusy(on, msg) {
+        document.getElementById('login-busy').hidden = !on;
+        document.getElementById('login-busy-msg').textContent = msg || 'Connexion à Garmin…';
+        document.getElementById('connect-btn').disabled = on;
+        document.getElementById('mfa-btn').disabled = on;
+      }
+
+      function finishLogin(res) {
+        const id = createLiveProfile(res.token, res.name || 'Athlète');
+        showStatus('success', 'Connecté ! Récupération de tes données…');
+        window.location.href = 'app.html';
+      }
+
+      async function doLogin() {
+        clearStatus();
+        const email = document.getElementById('garmin-email').value.trim();
+        const password = document.getElementById('garmin-password').value;
+        if (!email || !password) { showStatus('error', 'Renseigne ton email et ton mot de passe Garmin.'); return; }
+        setLoginBusy(true, 'Connexion à Garmin…');
+        try {
+          const res = await backendLogin(email, password);
+          if (res.status === 'mfa_required') {
+            mfaTicket = res.ticket;
+            document.getElementById('mfa-field').hidden = false;
+            document.getElementById('connect-btn').hidden = true;
+            document.getElementById('mfa-btn').hidden = false;
+            setLoginBusy(false);
+            document.getElementById('mfa-code').focus();
+            showStatus('info', 'Garmin demande un code de vérification — entre-le ci-dessous.');
+            return;
+          }
+          finishLogin(res);
+        } catch (err) {
+          setLoginBusy(false);
+          showStatus('error', err.message);
+        }
+      }
+
+      async function doMfa() {
+        clearStatus();
+        const code = document.getElementById('mfa-code').value.trim();
+        if (!code) { showStatus('error', 'Entre le code de vérification.'); return; }
+        setLoginBusy(true, 'Vérification du code…');
+        try {
+          const res = await backendMfa(mfaTicket, code);
+          finishLogin(res);
+        } catch (err) {
+          setLoginBusy(false);
+          showStatus('error', err.message);
+        }
+      }
+
+      /* ---- Import flow ---- */
+
+      function openImportView(profileId) {
+        stagedData = null;
+        importTargetId = profileId || null;
+        const nameField = document.getElementById('import-name-field');
+        const nameInput = document.getElementById('import-name');
+        const existing = profileId ? getProfile(profileId) : null;
+        document.getElementById('import-title').textContent = existing ? `Mettre à jour « ${existing.name} »` : 'Importer un export local';
+        nameField.hidden = Boolean(existing);
+        if (!existing) nameInput.value = '';
+        document.getElementById('dropzone-label').innerHTML = 'Clique ou dépose <code>garmin-data.json</code> ici';
+        document.getElementById('dropzone').classList.remove('ready', 'error');
+        document.getElementById('import-save-btn').disabled = true;
+        showView('import-view');
+      }
+
+      function handleJsonFile(file) {
+        const dropzone = document.getElementById('dropzone');
+        const label = document.getElementById('dropzone-label');
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = parseGarminExport(reader.result);
+            stagedData = parsed;
+            dropzone.classList.add('ready'); dropzone.classList.remove('error');
+            label.innerHTML = `✅ <strong>${parsed.activities.length}</strong> activités · <strong>${parsed.wellness.length}</strong> jours de wellness`;
+            document.getElementById('import-save-btn').disabled = false;
+          } catch (err) {
+            stagedData = null;
+            dropzone.classList.add('error'); dropzone.classList.remove('ready');
+            label.textContent = '❌ ' + err.message;
+            document.getElementById('import-save-btn').disabled = true;
+          }
+        };
+        reader.onerror = () => { label.textContent = '❌ Impossible de lire le fichier.'; };
+        reader.readAsText(file);
+      }
+
+      function saveImport() {
+        if (!stagedData) return;
+        let id = importTargetId;
+        if (!id) {
+          const name = document.getElementById('import-name').value.trim()
+            || (stagedData.athlete && stagedData.athlete.name) || '';
+          if (!name) { showStatus('error', 'Donne un nom au profil.'); return; }
+          id = `imp_${slugify(name)}_${Date.now().toString(36)}`;
+          upsertProfile({ id, name, avatar: null, source: 'import' });
+        }
+        mergeImportedData(id, stagedData);
+        setActiveId(id);
+        window.location.href = 'app.html';
+      }
+
+      function route() {
+        if (!isConfigured()) {
+          if (hasProfiles()) { renderProfilesList(); showView('connected-view'); }
+          else showView('setup-view');
+          return;
+        }
+        if (hasProfiles()) { renderProfilesList(); showView('connected-view'); }
+        else showConnectView(false);
+      }
+
+      function init() {
+        const params = new URLSearchParams(window.location.search);
+
+        if (params.get('add') === '1') {
+          window.history.replaceState({}, '', window.location.pathname);
+          if (isConfigured()) { showConnectView(true); return; }
+          showView('setup-view'); return;
+        }
+
+        const importId = params.get('import');
+        if (importId) {
+          window.history.replaceState({}, '', window.location.pathname);
+          openImportView(getProfile(importId) ? importId : null);
+          return;
+        }
+
+        route();
+      }
+
+      /* ---- Wiring ---- */
+
+      document.getElementById('backend-url').value = getBackendUrl();
+      document.getElementById('save-backend-btn').addEventListener('click', () => {
+        const url = document.getElementById('backend-url').value.trim();
+        if (!/^https?:\/\//.test(url)) { showStatus('error', "Entre une URL valide (commençant par https://)."); return; }
+        setBackendUrl(url);
+        clearStatus();
+        showConnectView(false);
+      });
+      document.getElementById('reset-backend-btn').addEventListener('click', () => { showView('setup-view'); });
+      document.getElementById('add-athlete-btn').addEventListener('click', () => {
+        if (!isConfigured()) { showView('setup-view'); return; }
+        showConnectView(true);
+      });
+
+      document.getElementById('connect-btn').addEventListener('click', doLogin);
+      document.getElementById('mfa-btn').addEventListener('click', doMfa);
+      document.getElementById('garmin-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+      document.getElementById('mfa-code').addEventListener('keydown', e => { if (e.key === 'Enter') doMfa(); });
+
+      document.getElementById('demo-btn-setup').addEventListener('click', startDemo);
+      document.getElementById('demo-btn-connect').addEventListener('click', startDemo);
+
+      document.getElementById('import-btn-setup').addEventListener('click', () => openImportView(null));
+      document.getElementById('import-btn-connect').addEventListener('click', () => openImportView(null));
+      document.getElementById('import-btn-connected').addEventListener('click', () => openImportView(null));
+      document.getElementById('import-cancel-btn').addEventListener('click', route);
+      document.getElementById('import-save-btn').addEventListener('click', saveImport);
+
+      const jsonInput = document.getElementById('json-file');
+      jsonInput.addEventListener('change', () => { if (jsonInput.files && jsonInput.files[0]) handleJsonFile(jsonInput.files[0]); });
+      const dropzone = document.getElementById('dropzone');
+      ['dragover', 'dragenter'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('dragging'); }));
+      ['dragleave', 'dragend'].forEach(evt => dropzone.addEventListener(evt, () => dropzone.classList.remove('dragging')));
+      dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('dragging'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) handleJsonFile(f); });
+
+      init();
+    </script>
+  </body>
+</html>

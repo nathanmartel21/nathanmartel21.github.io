@@ -593,6 +593,10 @@ img { max-width: 100%; display: block; }
 .import-help .setup-steps { margin-bottom: 0.5rem; }
 .import-help .setup-steps li { font-size: 0.86rem; }
 
+.garmin-cross { display: block; margin-top: 0.5rem; color: var(--text-faint); font-size: 0.88rem; }
+.garmin-cross a { color: #00a8e8; font-weight: 600; }
+.garmin-cross a:hover { text-decoration: underline; }
+
 .import-sync-note {
   font-size: 0.86rem;
   color: var(--text-muted);

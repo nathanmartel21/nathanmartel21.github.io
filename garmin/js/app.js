@@ -1,0 +1,710 @@
+/* Dashboard orchestration: loads data (live sync, import cache or demo),
+   runs the analysis engine and renders every section — including the
+   Garmin-specific recovery metrics, the AI recommendation of the day, and
+   the wellness charts (sleep, stress, Body Battery, HRV, resting HR). */
+
+(function () {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+
+  if (!activeHasSession()) { window.location.replace('index.html'); return; }
+
+  /* ---------------- Chart.js theme ---------------- */
+  const FONT_MONO = "'JetBrains Mono', monospace";
+  Chart.defaults.color = '#9aa7b7';
+  Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  Chart.defaults.font.size = 11;
+
+  const ACCENT = '#00a8e8';
+  const ACCENT_SOFT = 'rgba(0,168,232,0.35)';
+  const BLUE = '#60a5fa';
+  const GREEN = '#34d399';
+  const YELLOW = '#fbbf24';
+  const PURPLE = '#a78bfa';
+  const TEAL = '#22d3ee';
+  const RED = '#f87171';
+
+  const charts = {};
+  const RANGES = [{ label: '1M', days: 31 }, { label: '3M', days: 92 }, { label: '6M', days: 183 }, { label: '1A', days: 365 }];
+  const WELLNESS_RANGES = [{ label: '7J', days: 7 }, { label: '14J', days: 14 }, { label: '30J', days: 30 }, { label: '90J', days: 90 }];
+
+  function setupRange(container, ranges, defaultDays, onChange) {
+    if (!container) return;
+    container.innerHTML = ranges.map(r => `<button type="button" data-days="${r.days}"${r.days === defaultDays ? ' class="active"' : ''}>${r.label}</button>`).join('');
+    container.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onChange(Number(btn.getAttribute('data-days')));
+      });
+    });
+    onChange(defaultDays);
+  }
+
+  function showError(text) { const el = $('dash-status'); el.className = 'status-msg show error'; el.textContent = text; }
+  function setLoader(visible, msg) { $('loader').classList.toggle('show', visible); if (msg) $('loader-msg').textContent = msg; }
+
+  /* ---------------- Data loading ---------------- */
+
+  async function loadData(forceSync) {
+    if (isActiveDemo()) {
+      const d = demoData();
+      return { athlete: d.athlete, activities: d.activities, wellness: d.wellness, snapshot: d.snapshot };
+    }
+    if (isActiveImport()) {
+      const profile = getActiveProfile();
+      return {
+        athlete: getCachedAthlete() || { name: profile.name || 'Athlète' },
+        activities: getCachedActivities() || [],
+        wellness: getCachedWellness(),
+        snapshot: getCachedSnapshot()
+      };
+    }
+    // live
+    let activities = getCachedActivities();
+    if (!activities || forceSync) {
+      setLoader(true, 'Récupération de tes données Garmin… (ça peut prendre ~1 min)');
+      await syncLive();
+    }
+    return {
+      athlete: getCachedAthlete() || { name: (getActiveProfile() || {}).name || 'Athlète' },
+      activities: getCachedActivities() || [],
+      wellness: getCachedWellness(),
+      snapshot: getCachedSnapshot()
+    };
+  }
+
+  /* ---------------- Header ---------------- */
+
+  function renderSwitcher(athlete) {
+    if (isActiveDemo()) $('demo-badge').hidden = false;
+    if (isActiveImport()) { $('refresh-btn').textContent = '↻ Mettre à jour'; $('refresh-btn').title = 'Réimporter un export plus récent'; }
+
+    const select = $('profile-select');
+    const profiles = getProfiles();
+    const activeId = getActiveId();
+    select.innerHTML = profiles.map(p => `<option value="${p.id}"${p.id === activeId ? ' selected' : ''}>${p.name || 'Athlète'}</option>`).join('');
+    select.onchange = () => { setActiveId(select.value); window.location.reload(); };
+
+    const avatarUrl = athlete && athlete.avatar;
+    if (avatarUrl) { const img = $('profile-avatar'); img.src = avatarUrl; img.hidden = false; }
+    else $('profile-avatar').hidden = true;
+  }
+
+  /* ---------------- Recommendation of the day ---------------- */
+
+  function renderReco(runs, wellness, snapshot) {
+    const reco = buildRecommendation(runs, wellness, snapshot);
+    const card = $('reco-card');
+    card.setAttribute('data-level', reco.level);
+    $('reco-score').textContent = reco.recovery;
+    $('reco-ring').style.setProperty('--p', reco.recovery);
+    $('reco-title').textContent = reco.title;
+    $('reco-desc').textContent = reco.desc;
+    $('reco-factors').innerHTML = reco.factors.map(f => `<span class="pill">${f}</span>`).join('');
+  }
+
+  /* ---------------- Key metrics ---------------- */
+
+  function metricCard(cls, icon, label, value, sub) {
+    return `<div class="metric-card ${cls}">
+      <span class="metric-icon">${icon}</span>
+      <p class="metric-label">${label}</p>
+      <p class="metric-value">${value}</p>
+      <p class="metric-sub">${sub || ''}</p>
+    </div>`;
+  }
+
+  function renderMetrics(runs, wellness, snapshot) {
+    const grid = $('metric-grid');
+    const cards = [];
+    const today = latestWellness(wellness) || {};
+    const w7 = wellnessStats(wellness, 7);
+
+    if (today.training_readiness && today.training_readiness.score != null) {
+      const lvl = today.training_readiness.level || '';
+      cards.push(metricCard('c-vo2', '🤖', 'Training Readiness', `${today.training_readiness.score}<small>/100</small>`, lvl ? lvl.toLowerCase() : 'aujourd’hui'));
+    }
+    if (today.body_battery && today.body_battery.high != null) {
+      cards.push(metricCard('c-battery', '🔋', 'Body Battery', `${today.body_battery.high}<small>/100</small>`, `bas ${today.body_battery.low ?? '–'} · auj.`));
+    }
+    const lastSleep = latestWellness(wellness, 'sleep');
+    if (lastSleep && lastSleep.sleep) {
+      const h = (lastSleep.sleep.total || 0) / 3600;
+      cards.push(metricCard('c-sleep', '😴', 'Dernier sommeil', lastSleep.sleep.score != null ? `${lastSleep.sleep.score}<small>/100</small>` : `${h.toFixed(1)}<small> h</small>`, `${h.toFixed(1)} h de sommeil`));
+    }
+    if (w7.stress != null) cards.push(metricCard('c-stress', '🌡️', 'Stress (7 j)', `${Math.round(w7.stress)}<small>/100</small>`, 'moyenne 7 jours'));
+    if (w7.restingHr != null) cards.push(metricCard('c-rhr', '❤️', 'FC de repos (7 j)', `${Math.round(w7.restingHr)}<small> bpm</small>`, 'moyenne 7 jours'));
+
+    const vo2 = snapshot.vo2max_running || (runs.find(r => r.vo2max) || {}).vo2max;
+    if (vo2) cards.push(metricCard('c-vo2', '🫀', 'VO2max course', `${Math.round(vo2)}`, snapshot.fitness_age ? `âge forme ${Math.round(snapshot.fitness_age)} ans` : 'ml/kg/min'));
+
+    const hrv = latestWellness(wellness, 'hrv');
+    if (hrv && hrv.hrv && hrv.hrv.weekly_avg != null) cards.push(metricCard('c-hrv', '📈', 'HRV', `${hrv.hrv.weekly_avg}<small> ms</small>`, (hrv.hrv.status || '').toLowerCase() || 'moy. semaine'));
+
+    if (snapshot.training_status) cards.push(metricCard('c-vo2', '⚙️', 'Training Status', `<span style="font-size:1.1rem">${String(snapshot.training_status).replace(/_/g, ' ').toLowerCase()}</span>`, 'statut Garmin'));
+
+    grid.innerHTML = cards.join('') || '<p class="metric-sub">Pas de métriques de récupération dans ces données.</p>';
+  }
+
+  /* ---------------- Run of the day ---------------- */
+
+  function renderSuggestion(runs) {
+    const sug = suggestRun(runs);
+    $('sug-type').innerHTML = `${sug.type}<small>séance du jour</small>`;
+    $('sug-title').textContent = sug.title;
+    $('sug-desc').textContent = sug.desc;
+    $('sug-distance').textContent = sug.distance;
+    $('sug-pace').textContent = sug.pace;
+    $('sug-reason').textContent = sug.reason;
+  }
+
+  /* ---------------- KPIs ---------------- */
+
+  function kpiCard(period, stats, sub) {
+    return `<div class="kpi-card">
+      <p class="kpi-period">${period}</p>
+      <p class="kpi-value">${stats.km.toFixed(1).replace('.', ',')} <small>km</small></p>
+      <p class="kpi-sub">${stats.count} sortie${stats.count > 1 ? 's' : ''} · ${fmtDuration(stats.time)} · ${Math.round(stats.elev)} m D+${sub || ''}</p>
+    </div>`;
+  }
+
+  function renderKpis(runs) {
+    const stats = periodStats(runs);
+    const delta = stats.prev28.km > 0 ? ((stats.last28.km - stats.prev28.km) / stats.prev28.km) * 100 : 0;
+    const deltaHtml = stats.prev28.km > 0 ? `<br /><span class="kpi-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(0)} %</span> vs 4 semaines précédentes` : '';
+    $('kpi-grid').innerHTML = kpiCard('Cette semaine', stats.week) + kpiCard('4 dernières semaines', stats.last28, deltaHtml) + kpiCard(`Année ${new Date().getFullYear()}`, stats.year) + kpiCard('Au total', stats.total);
+  }
+
+  /* ---------------- Condition ---------------- */
+
+  function renderCondition(runs) {
+    const st = fitnessStatus(runs);
+    const card = $('condition-card');
+    $('cond-score').textContent = st.score;
+    $('cond-label').textContent = st.label;
+    $('cond-advice').textContent = st.advice;
+    $('cond-form').textContent = st.form >= 0 ? `+${st.form.toFixed(1)} (frais)` : `${st.form.toFixed(1)} (chargé)`;
+    $('cond-trend').textContent = st.trend >= 0 ? '▲ en hausse' : '▼ en baisse';
+    let tone = 'ok';
+    if (/fatigue|repos/i.test(st.label)) tone = 'warn';
+    else if (/affûté|progression/i.test(st.label)) tone = 'good';
+    else if (/construction|désentra/i.test(st.label)) tone = 'build';
+    card.setAttribute('data-tone', tone);
+  }
+
+  /* ---------------- Auto signals / load & risk / correlations ---------------- */
+
+  function renderInsights(runs, wellness, snapshot) {
+    const list = autoInsights(runs, wellness, snapshot);
+    const sec = $('insights-section');
+    if (!list.length) { sec.hidden = true; return; }
+    sec.hidden = false;
+    $('insights-list').innerHTML = list.map(s => `<span class="insight-chip" data-tone="${s.tone}">${s.icon} ${s.text}</span>`).join('');
+  }
+
+  function renderLoadRisk(runs, wellness) {
+    const a = acwr(runs);
+    const risk = overtrainingRisk(runs, wellness);
+    const sec = $('load-section');
+    if (!a && !risk) { sec.hidden = true; return; }
+    sec.hidden = false;
+
+    const acwrCard = $('acwr-card');
+    if (a) {
+      acwrCard.hidden = false;
+      acwrCard.setAttribute('data-tone', a.tone);
+      $('acwr-ratio').textContent = a.ratio.toFixed(2);
+      $('acwr-zone').textContent = a.zone;
+      $('acwr-advice').textContent = a.advice;
+      $('acwr-acute').textContent = Math.round(a.acute);
+      $('acwr-chronic').textContent = Math.round(a.chronic);
+    } else acwrCard.hidden = true;
+
+    const riskCard = $('risk-card');
+    if (risk) {
+      riskCard.hidden = false;
+      riskCard.setAttribute('data-tone', risk.tone);
+      $('risk-score').textContent = risk.score;
+      $('risk-level').textContent = risk.level;
+      $('risk-factors').innerHTML = risk.factors.map(f => `<li>${f}</li>`).join('');
+    } else riskCard.hidden = true;
+  }
+
+  function renderCorrelations(activities, wellness) {
+    const corr = correlations(activities, wellness);
+    const sec = $('corr-section');
+    if (!corr.length) { sec.hidden = true; return; }
+    sec.hidden = false;
+    $('corr-grid').innerHTML = corr.map(c => {
+      const tone = Math.abs(c.r) >= 0.5 ? 'strong' : Math.abs(c.r) >= 0.3 ? 'mod' : 'weak';
+      const pct = Math.round(Math.abs(c.r) * 100);
+      const sign = c.r >= 0 ? '+' : '−';
+      return `<div class="corr-card" data-tone="${tone}">
+        <p class="corr-label">${c.label}</p>
+        <p class="corr-r">${sign}${Math.abs(c.r).toFixed(2)}</p>
+        <div class="corr-bar"><div class="corr-bar-fill" style="width:${pct}%"></div></div>
+        <p class="corr-text">${c.text} · ${c.n} jours</p>
+      </div>`;
+    }).join('');
+  }
+
+  /* ---------------- Charts: axes helper ---------------- */
+
+  const timeAxis = {
+    type: 'linear', grid: { display: false },
+    ticks: { maxTicksLimit: 6, font: { family: FONT_MONO, size: 10 }, callback: v => new Date(v).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) }
+  };
+
+  /* ---------------- Progression charts ---------------- */
+
+  function renderWeeklyChart(runs, days) {
+    const nWeeks = Math.max(4, Math.ceil(days / 7));
+    const weeks = weeklySeries(runs, nWeeks);
+    if (charts.weekly) charts.weekly.destroy();
+    charts.weekly = new Chart($('weekly-chart'), {
+      type: 'bar',
+      data: { labels: weeks.map(w => w.label), datasets: [{ label: 'km', data: weeks.map(w => Number(w.km.toFixed(1))), backgroundColor: weeks.map((_, i) => (i === weeks.length - 1 ? ACCENT : ACCENT_SOFT)), borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} km — ${weeks[ctx.dataIndex].count} sortie(s)` } } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 13, font: { family: FONT_MONO, size: 10 } } }, y: { beginAtZero: true, title: { display: true, text: 'km / semaine' } } } }
+    });
+  }
+
+  function renderFitnessChart(runs, days) {
+    const series = fitnessSeries(runs, days);
+    const labels = series.map(p => p.date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
+    if (charts.fitness) charts.fitness.destroy();
+    charts.fitness = new Chart($('fitness-chart'), {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'Forme (CTL)', data: series.map(p => Number(p.fitness.toFixed(1))), borderColor: ACCENT, backgroundColor: 'rgba(0,168,232,0.08)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.3 },
+        { label: 'Fatigue (ATL)', data: series.map(p => Number(p.fatigue.toFixed(1))), borderColor: RED, pointRadius: 0, borderWidth: 1.5, tension: 0.3 },
+        { label: 'Fraîcheur (TSB)', data: series.map(p => Number(p.form.toFixed(1))), borderColor: GREEN, borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5, tension: 0.3 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 7, font: { family: FONT_MONO, size: 10 } } }, y: { title: { display: true, text: 'charge' } } } }
+    });
+  }
+
+  function renderPaceChart(runs, days) {
+    const { points, rolling } = paceTrend(runs, days);
+    if (charts.pace) charts.pace.destroy();
+    charts.pace = new Chart($('pace-chart'), {
+      type: 'scatter',
+      data: { datasets: [
+        { label: 'Sortie', data: points.map(p => ({ x: p.date.getTime(), y: p.pace / 60, name: p.name, km: p.km })), backgroundColor: ACCENT_SOFT, pointRadius: 3.5 },
+        { type: 'line', label: 'Moyenne glissante', data: rolling.map(p => ({ x: p.date.getTime(), y: p.pace / 60 })), borderColor: YELLOW, pointRadius: 0, borderWidth: 2, tension: 0.35 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => { const r = ctx.raw; const pace = fmtPace(r.y * 60); return r.name ? ` ${r.name} — ${r.km.toFixed(1)} km à ${pace}` : ` ${pace}`; } } } }, scales: { x: timeAxis, y: { reverse: true, title: { display: true, text: 'allure (min/km)' }, ticks: { callback: v => { const m = Math.floor(v), s = Math.round((v - m) * 60); return `${m}:${String(s).padStart(2, '0')}`; } } } } }
+    });
+  }
+
+  function renderVo2Chart(runs, days) {
+    const pool = withinDays(runs, days).filter(r => r.vo2max).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (charts.vo2) charts.vo2.destroy();
+    charts.vo2 = new Chart($('vo2-chart'), {
+      type: 'line',
+      data: { datasets: [{ label: 'VO2max', data: pool.map(r => ({ x: new Date(r.date).getTime(), y: r.vo2max })), borderColor: ACCENT, backgroundColor: 'rgba(0,168,232,0.08)', fill: true, pointRadius: 2, borderWidth: 2, tension: 0.3 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` VO2max ${ctx.parsed.y.toFixed(1)}` } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'ml/kg/min' } } } }
+    });
+  }
+
+  function renderHeatmap(runs, days) {
+    const cells = calendarSeries(runs, days);
+    const container = $('heatmap');
+    container.innerHTML = '';
+    const firstDow = (cells[0].date.getDay() + 6) % 7;
+    for (let i = 0; i < firstDow; i++) { const pad = document.createElement('span'); pad.style.visibility = 'hidden'; pad.className = 'cell'; container.appendChild(pad); }
+    cells.forEach(c => {
+      const span = document.createElement('span');
+      let level = '';
+      if (c.km > 0) level = 'l1';
+      if (c.km >= 6) level = 'l2';
+      if (c.km >= 11) level = 'l3';
+      if (c.km >= 17) level = 'l4';
+      span.className = `cell ${level}`;
+      span.title = `${c.date.toLocaleDateString('fr-FR')} — ${c.km > 0 ? c.km.toFixed(1) + ' km' : 'repos'}`;
+      container.appendChild(span);
+    });
+  }
+
+  /* ---------------- Wellness charts ---------------- */
+
+  function renderSleepChart(wellness, days) {
+    const series = sleepStageSeries(wellness, days);
+    const labels = series.map(s => s.date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
+    if (charts.sleep) charts.sleep.destroy();
+    charts.sleep = new Chart($('sleep-chart'), {
+      type: 'bar',
+      data: { labels, datasets: [
+        { label: 'Profond', data: series.map(s => Number(s.deep.toFixed(2))), backgroundColor: '#3b2f8f' },
+        { label: 'Léger', data: series.map(s => Number(s.light.toFixed(2))), backgroundColor: PURPLE },
+        { label: 'Paradoxal', data: series.map(s => Number(s.rem.toFixed(2))), backgroundColor: TEAL },
+        { label: 'Éveil', data: series.map(s => Number(s.awake.toFixed(2))), backgroundColor: '#33404f' }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label} : ${ctx.parsed.y.toFixed(1)} h` } } }, scales: { x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 12, font: { family: FONT_MONO, size: 10 } } }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'heures' } } } }
+    });
+  }
+
+  /* Generic daily wellness line (points + rolling avg). */
+  function wellnessLine(key, canvasId, wellness, days, accessor, label, color, yTitle) {
+    const { points, rolling } = wellnessSeries(wellness, days, accessor);
+    if (charts[key]) charts[key].destroy();
+    charts[key] = new Chart($(canvasId), {
+      type: 'scatter',
+      data: { datasets: [
+        { label, data: points.map(p => ({ x: p.date.getTime(), y: Number(p.value.toFixed(1)) })), backgroundColor: color, pointRadius: 2.5 },
+        { type: 'line', label: 'Tendance', data: rolling.map(p => ({ x: p.date.getTime(), y: Number(p.value.toFixed(1)) })), borderColor: color, borderWidth: 2, pointRadius: 0, tension: 0.35 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} ${yTitle}` } } }, scales: { x: timeAxis, y: { title: { display: true, text: yTitle } } } }
+    });
+  }
+
+  function renderBatteryChart(wellness, days) {
+    const hi = wellnessSeries(wellness, days, w => w.body_battery && w.body_battery.high).points;
+    const lo = wellnessSeries(wellness, days, w => w.body_battery && w.body_battery.low).points;
+    if (charts.battery) charts.battery.destroy();
+    charts.battery = new Chart($('battery-chart'), {
+      type: 'line',
+      data: { datasets: [
+        { label: 'Max', data: hi.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: GREEN, backgroundColor: 'rgba(52,211,153,0.10)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.3 },
+        { label: 'Min', data: lo.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: YELLOW, pointRadius: 0, borderWidth: 1.5, tension: 0.3 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } }, scales: { x: timeAxis, y: { beginAtZero: true, max: 100, title: { display: true, text: 'Body Battery' } } } }
+    });
+  }
+
+  function renderHrvChart(wellness, days) {
+    const weekly = wellnessSeries(wellness, days, w => w.hrv && w.hrv.weekly_avg).points;
+    const night = wellnessSeries(wellness, days, w => w.hrv && w.hrv.last_night_avg).points;
+    if (charts.hrv) charts.hrv.destroy();
+    charts.hrv = new Chart($('hrv-chart'), {
+      type: 'line',
+      data: { datasets: [
+        { label: 'Dernière nuit', data: night.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: TEAL, pointRadius: 1.5, borderWidth: 1.5, tension: 0.3 },
+        { label: 'Moy. semaine', data: weekly.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: ACCENT, backgroundColor: 'rgba(0,168,232,0.08)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.3 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'HRV (ms)' } } } }
+    });
+  }
+
+  /* ---------------- Advanced charts ---------------- */
+
+  function renderZonesChart(runs, days) {
+    const zones = paceZoneDistribution(runs, days);
+    if (charts.zones) charts.zones.destroy();
+    charts.zones = new Chart($('zones-chart'), {
+      type: 'doughnut',
+      data: { labels: zones.map(z => z.label), datasets: [{ data: zones.map(z => z.seconds), backgroundColor: zones.map(z => z.color), borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }, tooltip: { callbacks: { label: ctx => ` ${ctx.label} : ${fmtDuration(ctx.parsed)} (${zones[ctx.dataIndex].pct} %)` } } } }
+    });
+  }
+
+  const SPORT_COLORS = ['#00a8e8', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#94a3b8', '#22d3ee'];
+
+  function renderSportChart(activities, days) {
+    const sports = sportBreakdown(activities, days);
+    if (charts.sport) charts.sport.destroy();
+    charts.sport = new Chart($('sport-chart'), {
+      type: 'doughnut',
+      data: { labels: sports.map(s => s.label), datasets: [{ data: sports.map(s => s.seconds), backgroundColor: SPORT_COLORS, borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }, tooltip: { callbacks: { label: ctx => ` ${ctx.label} : ${fmtDuration(ctx.parsed)}` } } } }
+    });
+  }
+
+  function renderEfficiencyChart(runs, days) {
+    const { points, rolling } = efficiencySeries(runs, days);
+    if (charts.eff) charts.eff.destroy();
+    charts.eff = new Chart($('eff-chart'), {
+      type: 'scatter',
+      data: { datasets: [
+        { label: 'Sortie', data: points.map(p => ({ x: p.date.getTime(), y: p.ef })), backgroundColor: 'rgba(96,165,250,0.4)', pointRadius: 3 },
+        { type: 'line', label: 'Tendance', data: rolling.map(p => ({ x: p.date.getTime(), y: p.ef })), borderColor: GREEN, borderWidth: 2, pointRadius: 0, tension: 0.35 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => ` efficience ${ctx.parsed.y.toFixed(2)} m/battement` } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'm / battement (↑ = mieux)' } } } }
+    });
+  }
+
+  function renderHrPaceChart(runs, days) {
+    const pts = hrPaceScatter(runs, days);
+    if (charts.hrpace) charts.hrpace.destroy();
+    charts.hrpace = new Chart($('hrpace-chart'), {
+      type: 'scatter',
+      data: { datasets: [{ label: 'Sortie', data: pts.map(p => ({ x: p.pace, y: p.hr, km: p.km })), backgroundColor: 'rgba(0,168,232,0.45)', pointRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw.km.toFixed(1)} km — ${fmtPace(ctx.raw.x * 60)} · ${Math.round(ctx.raw.y)} bpm` } } }, scales: { x: { title: { display: true, text: 'allure (min/km)' }, reverse: true, ticks: { callback: v => { const m = Math.floor(v), s = Math.round((v - m) * 60); return `${m}:${String(s).padStart(2, '0')}`; } } }, y: { title: { display: true, text: 'FC moyenne (bpm)' } } } }
+    });
+  }
+
+  function renderCadenceChart(runs, days) {
+    const { points, rolling } = cadenceSeries(runs, days);
+    if (charts.cadence) charts.cadence.destroy();
+    charts.cadence = new Chart($('cadence-chart'), {
+      type: 'scatter',
+      data: { datasets: [
+        { label: 'Sortie', data: points.map(p => ({ x: p.date.getTime(), y: p.cadence })), backgroundColor: 'rgba(251,191,36,0.4)', pointRadius: 3 },
+        { type: 'line', label: 'Moyenne glissante', data: rolling.map(p => ({ x: p.date.getTime(), y: p.cadence })), borderColor: YELLOW, borderWidth: 2, pointRadius: 0, tension: 0.35 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => ` ${Math.round(ctx.parsed.y)} pas/min` } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'cadence (pas/min)' } } } }
+    });
+  }
+
+  function renderDistanceChart(runs, days) {
+    const buckets = distanceDistribution(runs, days);
+    if (charts.distrib) charts.distrib.destroy();
+    charts.distrib = new Chart($('distrib-chart'), {
+      type: 'bar',
+      data: { labels: buckets.map(b => b.label + ' km'), datasets: [{ data: buckets.map(b => b.count), backgroundColor: ACCENT_SOFT, borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} sortie(s)` } } }, scales: { x: { grid: { display: false }, ticks: { font: { family: FONT_MONO, size: 10 } } }, y: { beginAtZero: true, title: { display: true, text: 'nb de sorties' } } } }
+    });
+  }
+
+  function renderWeekdayChart(runs, days) {
+    const wd = weekdayDistribution(runs, days);
+    if (charts.weekday) charts.weekday.destroy();
+    charts.weekday = new Chart($('weekday-chart'), {
+      type: 'bar',
+      data: { labels: wd.map(d => d.label), datasets: [{ data: wd.map(d => Number(d.km.toFixed(1))), backgroundColor: ACCENT_SOFT, borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} km — ${wd[ctx.dataIndex].count} sortie(s)` } } }, scales: { x: { grid: { display: false }, ticks: { font: { family: FONT_MONO, size: 11 } } }, y: { beginAtZero: true, title: { display: true, text: 'km cumulés' } } } }
+    });
+  }
+
+  function renderEffortChart(runs, days) {
+    const weeks = weeklyEffort(runs, Math.max(4, Math.ceil(days / 7)));
+    if (charts.effort) charts.effort.destroy();
+    charts.effort = new Chart($('effort-chart'), {
+      type: 'bar',
+      data: { labels: weeks.map(w => w.label), datasets: [{ data: weeks.map(w => Math.round(w.effort)), backgroundColor: 'rgba(0,168,232,0.5)', borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` charge ${ctx.parsed.y}` } } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 13, font: { family: FONT_MONO, size: 10 } } }, y: { beginAtZero: true, title: { display: true, text: 'charge / sem.' } } } }
+    });
+  }
+
+  function renderElevChart(runs, days) {
+    const data = monthlyAggregate(runs, days, r => r.elev);
+    if (charts.elev) charts.elev.destroy();
+    charts.elev = new Chart($('elev-chart'), {
+      type: 'bar',
+      data: { labels: data.map(d => d.label), datasets: [{ data: data.map(d => Math.round(d.value)), backgroundColor: ACCENT_SOFT, borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y.toLocaleString('fr-FR')} m D+` } } }, scales: { x: { grid: { display: false }, ticks: { font: { family: FONT_MONO, size: 10 } } }, y: { beginAtZero: true, title: { display: true, text: 'm D+' } } } }
+    });
+  }
+
+  /* Weekly intensity minutes from wellness. */
+  function renderIntensityChart(wellness, days) {
+    const start = addDays(startOfWeek(new Date()), -7 * (Math.max(1, Math.ceil(days / 7)) - 1));
+    const weeks = [];
+    for (let s = new Date(start); s <= new Date(); s = addDays(s, 7)) {
+      const end = addDays(s, 7);
+      const mins = wellness.filter(w => { const d = new Date(w.date); return d >= s && d < end; }).reduce((acc, w) => acc + (w.intensity_minutes || 0), 0);
+      weeks.push({ label: s.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }), mins });
+    }
+    if (charts.intensity) charts.intensity.destroy();
+    charts.intensity = new Chart($('intensity-chart'), {
+      type: 'bar',
+      data: { labels: weeks.map(w => w.label), datasets: [{ data: weeks.map(w => Math.round(w.mins)), backgroundColor: 'rgba(52,211,153,0.5)', borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} min intensives` } } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 13, font: { family: FONT_MONO, size: 10 } } }, y: { beginAtZero: true, title: { display: true, text: 'min / semaine' } } } }
+    });
+  }
+
+  /* ---------------- Records / goal / plan / activities ---------------- */
+
+  function renderRecords(runs) {
+    const records = computeRecords(runs);
+    $('records-grid').innerHTML = records.length
+      ? records.map(r => `<div class="record-card"><span class="trophy">${r.icon}</span><p class="record-name">${r.name}</p><p class="record-value">${r.value}</p><p class="record-detail">${r.detail}</p></div>`).join('')
+      : '<p class="metric-sub">Pas encore assez de courses pour calculer des records.</p>';
+  }
+
+  function renderGoal(runs) {
+    const stats = periodStats(runs);
+    const defaultGoal = Math.max(Math.round(stats.prev28.km / 4) || 20, 10);
+    const saved = Number(Profile.get(PKEY.weeklyGoal));
+    const goal = saved > 0 ? saved : defaultGoal;
+    const input = $('goal-input');
+    input.value = goal;
+    function update() {
+      const target = Number(input.value) || defaultGoal;
+      Profile.set(PKEY.weeklyGoal, String(target));
+      const done = stats.week.km;
+      const pct = Math.min((done / target) * 100, 100);
+      $('goal-fill').style.width = `${pct}%`;
+      const remaining = target - done;
+      $('goal-status').textContent = remaining > 0
+        ? `${done.toFixed(1).replace('.', ',')} km sur ${target} km cette semaine — plus que ${remaining.toFixed(1).replace('.', ',')} km. 💪`
+        : `Objectif atteint : ${done.toFixed(1).replace('.', ',')} km sur ${target} km cette semaine ! 🎉`;
+    }
+    input.addEventListener('change', update);
+    update();
+  }
+
+  const PLAN_OBJECTIVE_OPTIONS = [
+    ['forme', 'Forme générale', null], ['progression', 'Progression du volume', null],
+    ['race5', 'Course : 5 km', 5], ['race10', 'Course : 10 km', 10],
+    ['race21', 'Course : Semi (21,1 km)', 21.1], ['race42', 'Course : Marathon (42,2 km)', 42.2],
+    ['racecustom', 'Course : autre distance…', 'custom']
+  ];
+
+  function planSessionCard(s, index) {
+    return `<div class="plan-session"><div class="plan-session-head"><span class="plan-session-num">J${index + 1}</span><span class="act-type-badge${/endurance|tempo|fractionn|longue|récup|allure/i.test(s.type) ? '' : ' other'}">${s.type}</span></div><p class="plan-session-dist">${s.distance} km</p><p class="plan-session-pace">${s.pace}</p><p class="plan-session-focus">${s.focus}</p></div>`;
+  }
+
+  function defaultSessions(runs) { const stats = periodStats(runs); const perWeek = Math.round(stats.last28.count / 4); return Math.max(2, Math.min(6, perWeek || 4)); }
+  function parseTimeInput(str) { if (!str) return 0; const parts = String(str).trim().split(':').map(Number); if (parts.some(Number.isNaN)) return 0; return parts.reduce((a, p) => a * 60 + p, 0); }
+  function isRaceObjective(o) { return o.startsWith('race'); }
+
+  function renderPlan(runs) {
+    const select = $('plan-objective');
+    select.innerHTML = PLAN_OBJECTIVE_OPTIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    let sessions = Number(Profile.get(PKEY.planSessions)) || defaultSessions(runs);
+    sessions = Math.max(1, Math.min(7, sessions));
+    select.value = Profile.get(PKEY.planObjective) || 'forme';
+    $('plan-sessions-val').textContent = sessions;
+    $('plan-target-time').value = Profile.get(PKEY.planTargetTime) || '';
+    $('plan-weeks').value = Profile.get(PKEY.planWeeks) || '';
+    $('plan-race-km').value = Profile.get(PKEY.planRaceKm) || '';
+
+    function raceKmFor(value) { const opt = PLAN_OBJECTIVE_OPTIONS.find(o => o[0] === value); const km = opt && opt[2]; if (km === 'custom') return Number($('plan-race-km').value) || 0; return km || 0; }
+    function syncFields(value) { const race = isRaceObjective(value); $('plan-customkm-field').hidden = value !== 'racecustom'; $('plan-time-field').hidden = !race; $('plan-weeks-field').hidden = !race; $('plan-race-summary').hidden = !race; }
+
+    function update() {
+      const s = Number($('plan-sessions-val').textContent);
+      const value = select.value;
+      const objective = isRaceObjective(value) ? 'race' : value;
+      const raceKm = raceKmFor(value);
+      const targetSeconds = parseTimeInput($('plan-target-time').value);
+      const weeks = Number($('plan-weeks').value) || 0;
+      const raceLabel = (PLAN_OBJECTIVE_OPTIONS.find(o => o[0] === value)?.[1] || '').replace('Course : ', '');
+      Profile.set(PKEY.planSessions, String(s));
+      Profile.set(PKEY.planObjective, value);
+      Profile.set(PKEY.planTargetTime, $('plan-target-time').value);
+      Profile.set(PKEY.planWeeks, String(weeks || ''));
+      Profile.set(PKEY.planRaceKm, String($('plan-race-km').value || ''));
+      syncFields(value);
+      const plan = buildTrainingPlan(runs, { sessionsPerWeek: s, objective, raceKm, targetSeconds, weeksToRace: weeks, raceLabel });
+      $('plan-weekly-km').textContent = plan.weeklyKm;
+      $('plan-sessions').innerHTML = plan.sessions.map(planSessionCard).join('');
+      if (plan.mode === 'race') {
+        const needTime = !targetSeconds;
+        $('plan-race-pace').textContent = needTime ? 'saisis un temps' : plan.racePaceStr;
+        const feas = $('plan-feasibility');
+        if (needTime) { $('plan-feas-label').textContent = '⏱ Temps visé requis'; $('plan-feas-detail').textContent = 'Indique le temps visé pour calculer l’allure et la prépa.'; feas.setAttribute('data-tone', 'warn'); }
+        else { $('plan-feas-label').textContent = plan.feasibility.label + (plan.weeksToRace ? ` · ${plan.weeksToRace} sem. de prépa` : ''); $('plan-feas-detail').textContent = plan.feasibility.detail; feas.setAttribute('data-tone', plan.feasibility.tone || 'good'); }
+      }
+    }
+
+    $('plan-minus').onclick = () => { $('plan-sessions-val').textContent = Math.max(1, Number($('plan-sessions-val').textContent) - 1); update(); };
+    $('plan-plus').onclick = () => { $('plan-sessions-val').textContent = Math.min(7, Number($('plan-sessions-val').textContent) + 1); update(); };
+    select.onchange = update;
+    ['plan-target-time', 'plan-weeks', 'plan-race-km'].forEach(id => $(id).addEventListener('input', update));
+    syncFields(select.value);
+    update();
+  }
+
+  function renderActivities(activities) {
+    const tbody = $('activities-body');
+    const moreBtn = $('more-activities-btn');
+    let shown = 0;
+    const STEP = 15;
+    function row(act) {
+      const run = isRun(act);
+      const pace = run ? fmtPace(paceOf(act)) : '–';
+      return `<tr><td>${fmtDate(act.date)}</td><td class="act-name">${act.name}</td><td><span class="act-type-badge ${run ? '' : 'other'}">${act.type}</span></td><td>${fmtKm(act.distance)} km</td><td>${fmtDuration(act.moving_time)}</td><td>${pace}</td><td>${Math.round(act.elev || 0)} m</td><td>${act.avg_hr ? Math.round(act.avg_hr) + ' bpm' : '–'}</td><td>${act.vo2max ? Math.round(act.vo2max) : '–'}</td></tr>`;
+    }
+    function showMore() { const next = activities.slice(shown, shown + STEP); tbody.insertAdjacentHTML('beforeend', next.map(row).join('')); shown += next.length; moreBtn.hidden = shown >= activities.length; }
+    moreBtn.addEventListener('click', showMore);
+    showMore();
+  }
+
+  /* ---------------- Render all ---------------- */
+
+  function renderAll(data) {
+    const activities = data.activities || [];
+    const wellness = data.wellness || [];
+    const snapshot = data.snapshot || {};
+    const runs = runsOnly(activities);
+
+    renderSwitcher(data.athlete);
+    renderReco(runs, wellness, snapshot);
+    renderInsights(runs, wellness, snapshot);
+    renderMetrics(runs, wellness, snapshot);
+    renderSuggestion(runs);
+    renderPlan(runs);
+    if (window.AICoach) AICoach.mount({ activities, wellness, snapshot });
+    renderCondition(runs);
+    renderLoadRisk(runs, wellness);
+    renderCorrelations(activities, wellness);
+    renderKpis(runs);
+
+    /* Running progression */
+    setupRange($('range-weekly'), RANGES, 183, days => renderWeeklyChart(runs, days));
+    setupRange($('range-fitness'), RANGES, 183, days => renderFitnessChart(runs, days));
+    setupRange($('range-pace'), RANGES, 183, days => renderPaceChart(runs, days));
+    setupRange($('range-vo2'), RANGES, 365, days => renderVo2Chart(runs, days));
+    setupRange($('range-heatmap'), RANGES, 365, days => renderHeatmap(runs, days));
+
+    /* Wellness */
+    const hasWellness = wellness.length > 0;
+    $('recovery-section').hidden = !hasWellness;
+    if (hasWellness) {
+      const maxDays = Math.min(90, Math.max(7, wellness.length));
+      const defDays = Math.min(30, maxDays);
+      setupRange($('range-sleep'), WELLNESS_RANGES, defDays, days => renderSleepChart(wellness, days));
+      setupRange($('range-sleepscore'), WELLNESS_RANGES, defDays, days => wellnessLine('sleepscore', 'sleepscore-chart', wellness, days, w => w.sleep && w.sleep.score, 'Score', PURPLE, '/100'));
+      setupRange($('range-rhr'), WELLNESS_RANGES, defDays, days => wellnessLine('rhr', 'rhr-chart', wellness, days, w => w.resting_hr, 'FC repos', RED, 'bpm'));
+      setupRange($('range-battery'), WELLNESS_RANGES, defDays, days => renderBatteryChart(wellness, days));
+      setupRange($('range-stress'), WELLNESS_RANGES, defDays, days => wellnessLine('stress', 'stress-chart', wellness, days, w => w.stress && w.stress.avg, 'Stress', YELLOW, '/100'));
+      setupRange($('range-hrv'), WELLNESS_RANGES, defDays, days => renderHrvChart(wellness, days));
+      setupRange($('range-intensity'), RANGES, 92, days => renderIntensityChart(wellness, days));
+    } else {
+      $('range-intensity').closest('.chart-card').hidden = true;
+    }
+
+    /* Advanced */
+    setupRange($('range-zones'), RANGES, 365, days => renderZonesChart(runs, days));
+    setupRange($('range-sport'), RANGES, 365, days => renderSportChart(activities, days));
+    setupRange($('range-eff'), RANGES, 365, days => renderEfficiencyChart(runs, days));
+    setupRange($('range-hrpace'), RANGES, 365, days => renderHrPaceChart(runs, days));
+    setupRange($('range-cadence'), RANGES, 365, days => renderCadenceChart(runs, days));
+    setupRange($('range-effort'), RANGES, 183, days => renderEffortChart(runs, days));
+    setupRange($('range-distrib'), RANGES, 365, days => renderDistanceChart(runs, days));
+    setupRange($('range-weekday'), RANGES, 365, days => renderWeekdayChart(runs, days));
+    setupRange($('range-elev'), RANGES, 365, days => renderElevChart(runs, days));
+
+    renderRecords(runs);
+    renderGoal(runs);
+    renderActivities(activities);
+    setLoader(false);
+    $('dash-content').classList.add('show');
+  }
+
+  /* ---------------- Events ---------------- */
+
+  $('logout-btn').addEventListener('click', () => {
+    const profile = getActiveProfile();
+    const label = profile ? profile.name : 'ce profil';
+    if (confirm(`Déconnecter « ${label} » ? Ses données mises en cache sur ce navigateur seront effacées.`)) logoutActive();
+  });
+
+  $('refresh-btn').addEventListener('click', async () => {
+    if (isActiveDemo()) { window.location.reload(); return; }
+    if (isActiveImport()) { window.location.href = 'index.html?import=' + encodeURIComponent(getActiveId()); return; }
+    const btn = $('refresh-btn');
+    btn.disabled = true;
+    btn.textContent = 'Synchronisation…';
+    try { await syncLive(); window.location.reload(); }
+    catch (err) { showError(err.message); btn.disabled = false; btn.textContent = '↻ Synchroniser'; }
+  });
+
+  /* ---------------- Boot ---------------- */
+
+  (async function boot() {
+    try {
+      setLoader(true, isActiveDemo() ? 'Génération des données de démo…' : 'Chargement…');
+      const data = await loadData(false);
+      renderAll(data);
+    } catch (err) {
+      console.error(err);
+      setLoader(false);
+      showError(err.message || 'Erreur de chargement. Reconnecte-toi depuis la page d’accueil.');
+    }
+  })();
+})();

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/strava.css?v=9" />
+    <link rel="stylesheet" href="css/strava.css?v=10" />
   </head>
   <body>
     <header class="topbar">
@@ -134,18 +134,10 @@
           </div>
         </div>
 
-        <!-- State 5: import a Strava or Garmin data export (no subscription) -->
+        <!-- State 5: import a Strava data export (no subscription) -->
         <div id="import-view" hidden>
-          <h2 id="import-title">Importer un export (Strava ou Garmin)</h2>
-          <p>Gratuit, sans abonnement. Dépose le fichier <code>.csv</code> d’export de tes activités — l’app détecte automatiquement le format Strava ou Garmin.</p>
-          <details class="import-help">
-            <summary>📦 Depuis <strong>Garmin Connect</strong></summary>
-            <ol class="setup-steps">
-              <li>Sur <a href="https://connect.garmin.com/modern/activities" target="_blank" rel="noreferrer">Garmin Connect → Activités</a>, fais défiler pour charger toutes les activités voulues (ou filtre par période).</li>
-              <li>Clique sur l’icône d’export <strong>« Exporter au format CSV »</strong> en haut à droite de la liste.</li>
-              <li>Nomme le profil et dépose le CSV ci-dessous.</li>
-            </ol>
-          </details>
+          <h2 id="import-title">Importer un export Strava</h2>
+          <p>Gratuit, sans abonnement. Dépose le fichier <code>activities.csv</code> de l’export de tes activités Strava. <span class="garmin-cross">Tu utilises une montre Garmin ? <a href="../garmin/index.html">→ ouvre plutôt l’app Garmin Premium</a> (bien plus de données).</span></p>
           <details class="import-help">
             <summary>🟠 Depuis <strong>Strava</strong></summary>
             <ol class="setup-steps">
@@ -186,9 +178,9 @@
       <p>App personnelle de Nathan Martel — propulsée par l’<a href="https://developers.strava.com/" target="_blank" rel="noreferrer">API Strava</a>. Non affiliée à Strava Inc.</p>
     </footer>
 
-    <script src="js/config.js?v=9"></script>
-    <script src="js/auth.js?v=9"></script>
-    <script src="js/import.js?v=9"></script>
+    <script src="js/config.js?v=10"></script>
+    <script src="js/auth.js?v=10"></script>
+    <script src="js/import.js?v=10"></script>
     <script>
       const views = ['setup-view', 'connect-view', 'connected-view', 'exchanging-view', 'import-view'];
       /* True when the connect screen is opened to add an extra athlete. */

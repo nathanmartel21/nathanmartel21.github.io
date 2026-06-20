@@ -22,6 +22,7 @@
   --accent-dim: rgba(52, 211, 153, 0.12);
   --accent-2: #60a5fa;
   --strava: #fc4c02;
+  --garmin: #00a8e8;
 
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -153,6 +154,17 @@ a {
 .site-nav a.nav-strava:hover {
   background: rgba(252, 76, 2, 0.12);
   color: #ff7a3d;
+}
+
+.site-nav a.nav-garmin {
+  color: var(--garmin);
+  border: 1px solid rgba(0, 168, 232, 0.35);
+  margin-left: 0.35rem;
+}
+
+.site-nav a.nav-garmin:hover {
+  background: rgba(0, 168, 232, 0.12);
+  color: #2bc4ff;
 }
 
 /* ------------------------------------------------------------------
@@ -293,6 +305,15 @@ a {
 
 .btn-strava:hover {
   background: #ff5e1a;
+}
+
+.btn-garmin {
+  background: var(--garmin);
+  color: #00121c;
+}
+
+.btn-garmin:hover {
+  background: #2bc4ff;
 }
 
 /* Terminal card */
@@ -598,6 +619,32 @@ a {
   max-width: 560px;
 }
 
+.garmin-teaser {
+  border: 1px solid rgba(0, 168, 232, 0.3);
+  background: linear-gradient(135deg, rgba(0, 168, 232, 0.08) 0%, var(--bg-card) 55%);
+  border-radius: var(--radius-lg);
+  padding: 2.25rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2rem;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+
+.garmin-teaser .section-label { color: var(--garmin); }
+
+.garmin-teaser h2 {
+  font-family: var(--font-display);
+  margin: 0 0 0.6rem;
+  font-size: 1.5rem;
+}
+
+.garmin-teaser p {
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 560px;
+}
+
 /* ------------------------------------------------------------------
    Contact
    ------------------------------------------------------------------ */
@@ -771,7 +818,8 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .strava-teaser {
+  .strava-teaser,
+  .garmin-teaser {
     grid-template-columns: 1fr;
   }
 }
