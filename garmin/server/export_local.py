@@ -56,7 +56,7 @@ def _login() -> Garmin:
         garmin.resume_login(result[1], code)
 
     try:
-        garmin.garth.dump(TOKENSTORE)
+        garmin.client.dump(TOKENSTORE)
         print(f"Session mise en cache dans {TOKENSTORE}", file=sys.stderr)
     except Exception:  # noqa: BLE001
         pass

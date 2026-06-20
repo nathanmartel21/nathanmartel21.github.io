@@ -301,16 +301,13 @@ def pull_snapshot(api: Any) -> dict:
 def pull_all(api: Any, activities_limit: int = 400, wellness_days: int = 30,
              progress: Optional[Callable[[int, int], None]] = None) -> dict:
     """Build the full ``garmin-data.json`` payload from an authed client."""
-    name = _safe(lambda: api.get_full_name()) or _safe(lambda: api.full_name) or "Athlète"
-    try:
-        athlete_id = api.get_unit_system() and getattr(api, "display_name", None)
-    except Exception:  # noqa: BLE001
-        athlete_id = None
+    name = getattr(api, "full_name", None) or _safe(lambda: api.get_full_name()) or "Athlète"
+    athlete_id = getattr(api, "display_name", None)
 
     return {
         "schema": "garmin-export/1",
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
-        "athlete": {"name": name, "id": athlete_id or getattr(api, "display_name", None)},
+        "athlete": {"name": name, "id": athlete_id},
         "activities": pull_activities(api, activities_limit),
         "wellness": pull_wellness(api, wellness_days, progress),
         "snapshot": pull_snapshot(api),

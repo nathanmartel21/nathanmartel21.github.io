@@ -100,9 +100,28 @@ def _rate_limit(request: Request) -> None:
 # Token (opaque to the browser): base64(json({garth, display_name, full_name}))
 # --------------------------------------------------------------------------- #
 
+# This garminconnect version bundles its garth client at ``garmin.client``
+# (with dumps/loads/connectapi) — there is no ``garmin.garth`` attribute.
+def _ensure_profile(garmin: Garmin) -> None:
+    """Populate display_name/full_name (login(return_on_mfa) skips this)."""
+    if getattr(garmin, "display_name", None):
+        return
+    try:
+        prof = garmin.client.connectapi("/userprofile-service/socialProfile")
+        if isinstance(prof, dict):
+            garmin.display_name = prof.get("displayName")
+            garmin.full_name = prof.get("fullName") or getattr(garmin, "full_name", None)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _name(garmin: Garmin) -> str:
+    return getattr(garmin, "full_name", None) or getattr(garmin, "display_name", None) or "Athlète"
+
+
 def _make_token(garmin: Garmin) -> str:
     payload = {
-        "garth": garmin.garth.dumps(),
+        "garth": garmin.client.dumps(),
         "display_name": getattr(garmin, "display_name", None),
         "full_name": getattr(garmin, "full_name", None),
     }
@@ -113,13 +132,14 @@ def _client_from_token(token: str) -> Garmin:
     try:
         payload = json.loads(base64.urlsafe_b64decode(token.encode()).decode())
         garmin = Garmin()
-        garmin.garth.loads(payload["garth"])
+        garmin.client.loads(payload["garth"])
         # Methods build URLs from display_name; set it from the token so we
-        # never need to re-fetch the profile (and never need the password).
+        # never need the password again.
         if payload.get("display_name"):
             garmin.display_name = payload["display_name"]
         if payload.get("full_name"):
             garmin.full_name = payload["full_name"]
+        _ensure_profile(garmin)
         return garmin
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=401, detail="Session invalide ou expirée, reconnecte-toi.") from exc
@@ -174,8 +194,9 @@ def login(body: LoginIn, request: Request) -> dict:
             _MFA_PENDING[ticket] = (garmin, result2, time.time())
             return {"status": "mfa_required", "ticket": ticket}
 
-    return {"status": "ok", "token": _make_token(garmin),
-            "name": garmin_pull._safe(lambda: garmin.get_full_name()) or getattr(garmin, "full_name", "Athlète")}
+    # Clean login via return_on_mfa returns before the profile is loaded.
+    _ensure_profile(garmin)
+    return {"status": "ok", "token": _make_token(garmin), "name": _name(garmin)}
 
 
 @app.post("/api/login/mfa")
@@ -191,8 +212,8 @@ def login_mfa(body: MfaIn, request: Request) -> dict:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=401, detail=f"Code MFA refusé : {exc}") from exc
 
-    return {"status": "ok", "token": _make_token(garmin),
-            "name": garmin_pull._safe(lambda: garmin.get_full_name()) or getattr(garmin, "full_name", "Athlète")}
+    _ensure_profile(garmin)
+    return {"status": "ok", "token": _make_token(garmin), "name": _name(garmin)}
 
 
 @app.post("/api/sync")
