@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/garmin.css?v=3" />
+    <link rel="stylesheet" href="css/garmin.css?v=4" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
   </head>
   <body>
@@ -62,6 +62,7 @@
         <section class="dash-section" id="insights-section">
           <h2 class="dash-section-title">Signaux du jour <span class="hint">détectés automatiquement dans tes données</span></h2>
           <div class="insights-list" id="insights-list"></div>
+          <div class="ai-alert" id="ai-alert" hidden></div>
         </section>
 
         <!-- AI tips of the day -->
@@ -233,6 +234,7 @@
                   <span>💬 Discuter avec le coach</span>
                   <button class="btn btn-ghost btn-sm" id="ai-clear-chat">Effacer</button>
                 </div>
+                <div class="ai-suggestions" id="ai-suggestions"></div>
                 <div class="ai-chat-log" id="ai-chat-log"></div>
                 <div class="ai-chat-input">
                   <textarea id="ai-input" rows="1" placeholder="Ex. « Vu ma readiness et mon sommeil, je fais quoi cette semaine ? »"></textarea>
@@ -400,6 +402,7 @@
         <!-- Activities -->
         <section class="dash-section">
           <h2 class="dash-section-title">Dernières activités</h2>
+          <p class="lastrun-comment" id="ai-lastrun" hidden></p>
           <div class="activities-table-wrap">
             <table class="activities-table">
               <thead><tr><th>Date</th><th>Activité</th><th>Type</th><th>Distance</th><th>Durée</th><th>Allure</th><th>D+</th><th>FC moy.</th><th>VO2max</th></tr></thead>
@@ -417,13 +420,13 @@
       <p>App personnelle de Nathan Martel — données via Garmin Connect, stockées uniquement dans ce navigateur.</p>
     </footer>
 
-    <script src="js/config.js?v=3"></script>
-    <script src="js/api.js?v=3"></script>
-    <script src="js/import.js?v=3"></script>
-    <script src="js/analysis.js?v=3"></script>
-    <script src="js/demo.js?v=3"></script>
-    <script src="js/ai-key.js?v=3"></script>
-    <script src="js/ai.js?v=3"></script>
-    <script src="js/app.js?v=3"></script>
+    <script src="js/config.js?v=4"></script>
+    <script src="js/api.js?v=4"></script>
+    <script src="js/import.js?v=4"></script>
+    <script src="js/analysis.js?v=4"></script>
+    <script src="js/demo.js?v=4"></script>
+    <script src="js/ai-key.js?v=4"></script>
+    <script src="js/ai.js?v=4"></script>
+    <script src="js/app.js?v=4"></script>
   </body>
 </html>

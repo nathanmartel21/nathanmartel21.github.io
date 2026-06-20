@@ -280,7 +280,7 @@
   const $ = id => document.getElementById(id);
 
   function AICoach() {
-    let summary = null, turns = [], busy = false, controller = null;
+    let summary = null, turns = [], busy = false, controller = null, mountedData = null;
 
     function isPinned(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 60; }
 
@@ -340,7 +340,7 @@
       try {
         const key = await decryptKey(window.AI_KEY_BLOB, pass);
         if (!/^sk-or-/.test(key)) throw new Error('bad');
-        setSessionKey(key); msg.textContent = ''; $('ai-pass-input').value = ''; hideKeyGate(); generateTips(false);
+        setSessionKey(key); msg.textContent = ''; $('ai-pass-input').value = ''; hideKeyGate(); runAiExtras();
       } catch { msg.textContent = '❌ Mot de passe incorrect.'; }
     }
 
@@ -348,7 +348,7 @@
       const key = $('ai-own-key-input').value.trim();
       const msg = $('ai-key-msg');
       if (!/^sk-or-/.test(key)) { msg.textContent = 'Clé OpenRouter invalide (commence par sk-or-…).'; return; }
-      setDeviceKey(key); $('ai-own-key-input').value = ''; msg.textContent = ''; hideKeyGate(); generateTips(false);
+      setDeviceKey(key); $('ai-own-key-input').value = ''; msg.textContent = ''; hideKeyGate(); runAiExtras();
     }
 
     /* ---- One-shot AI briefing (proactive analysis, not the chat) ---- */
@@ -450,11 +450,83 @@
       }
     }
 
+    /* ---- AI one-liner on the last run (cached per activity id) ---- */
+    async function generateLastRunComment(run) {
+      const el = $('ai-lastrun');
+      if (!el || !run) return;
+      const ckey = `garmin_ai_runcomment_${(typeof getActiveId === 'function' && getActiveId()) || 'd'}_${run.id}`;
+      const cached = localStorage.getItem(ckey);
+      if (cached) { el.textContent = '💬 ' + cached; el.hidden = false; return; }
+      if (!activeKey()) { el.hidden = true; return; }
+      const desc = `Date ${run.date.slice(0, 10)}, ${(run.distance / 1000).toFixed(1)} km en ${fmtDuration(run.moving_time)}, allure ${fmtPace(paceOf(run))}, FC moy ${run.avg_hr || '?'} bpm, D+ ${Math.round(run.elev || 0)} m${run.vo2max ? ', VO2max ' + Math.round(run.vo2max) : ''}.`;
+      el.hidden = false; el.textContent = '💬 …';
+      try {
+        const full = await streamChat(
+          [{ role: 'system', content: 'Tu es un coach de course à pied concis et pertinent.' },
+           { role: 'user', content: `En UNE phrase courte, stylée et factuelle (max 18 mots), commente ma dernière sortie comme un coach. Données : ${desc} Pas de blabla, pas de guillemets.` }],
+          () => {}, new AbortController().signal, { maxTokens: 60, temperature: 0.7 }
+        );
+        const line = full.trim().replace(/^["'\s-]+|["'\s]+$/g, '');
+        if (line) { el.textContent = '💬 ' + line; try { localStorage.setItem(ckey, line); } catch {} }
+        else el.hidden = true;
+      } catch { el.hidden = true; }
+    }
+
+    /* ---- AI micro-explanation of the top red/amber signal (cached daily) ---- */
+    async function explainTopAlert(runs, wellness, snapshot) {
+      const el = $('ai-alert');
+      if (!el) return;
+      const signals = autoInsights(runs, wellness, snapshot);
+      const top = signals.find(s => s.tone === 'bad') || signals.find(s => s.tone === 'warn');
+      if (!top) { el.hidden = true; return; }
+      el.dataset.tone = top.tone;
+      const ckey = `garmin_ai_alert_${(typeof getActiveId === 'function' && getActiveId()) || 'd'}_${new Date().toISOString().slice(0, 10)}_${top.text.length}`;
+      const cached = localStorage.getItem(ckey);
+      if (cached) { el.innerHTML = `<span class="ai-alert-icon">${top.icon}</span><span>${escapeHtml(cached)}</span>`; el.hidden = false; return; }
+      if (!activeKey()) { el.hidden = true; return; }
+      el.hidden = false;
+      el.innerHTML = `<span class="ai-alert-icon">${top.icon}</span><span class="ai-cursor">▍</span>`;
+      try {
+        const full = await streamChat(
+          [{ role: 'system', content: systemPrompt(summary) },
+           { role: 'user', content: `Signal détecté dans mes données : "${top.text}". En 1 à 2 phrases max, explique ce que ça implique pour mon entraînement et donne UNE action concrète. Direct, pas de blabla.` }],
+          () => {}, new AbortController().signal, { maxTokens: 130, temperature: 0.6 }
+        );
+        const line = full.trim();
+        if (line) { el.innerHTML = `<span class="ai-alert-icon">${top.icon}</span><span>${escapeHtml(line)}</span>`; try { localStorage.setItem(ckey, line); } catch {} }
+        else el.hidden = true;
+      } catch { el.hidden = true; }
+    }
+
+    /* ---- Data-aware starter chips above the chat ---- */
+    function renderSuggestedQuestions() {
+      const sq = $('ai-suggestions');
+      if (!sq || !mountedData) return;
+      const qs = suggestedQuestions(runsOnly(mountedData.activities || []), mountedData.wellness || [], mountedData.snapshot || {});
+      sq.innerHTML = qs.map(q => `<button class="ai-chip" type="button">${escapeHtml(q)}</button>`).join('');
+      sq.querySelectorAll('.ai-chip').forEach(btn => btn.addEventListener('click', () => {
+        const t = btn.textContent;
+        $('ai-input').value = t;
+        runConversation(t);
+      }));
+    }
+
+    /* Runs the (cached) AI extras — called on mount and after the key unlocks. */
+    function runAiExtras() {
+      if (!mountedData) return;
+      const runs = runsOnly(mountedData.activities || []);
+      const lastRun = [...runs].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      generateTips(false);
+      generateLastRunComment(lastRun);
+      explainTopAlert(runs, mountedData.wellness || [], mountedData.snapshot || {});
+    }
+
     function readPlanForm() {
       return { objective: $('ai-plan-objective').value, raceKm: $('ai-plan-km').value.trim(), targetTime: $('ai-plan-time').value.trim(), weeks: $('ai-plan-weeks').value.trim(), sessions: $('ai-plan-sessions').value.trim(), notes: $('ai-plan-notes').value.trim() };
     }
 
     function mount(data) {
+      mountedData = data;
       summary = buildAthleteSummary(data);
       turns = loadTurns();
       $('ai-chat-log').innerHTML = '';
@@ -490,7 +562,10 @@
       // Lightweight tips of the day: cached → render; else auto-generate once if unlocked
       const tipsRefresh = $('ai-tips-refresh');
       if (tipsRefresh) tipsRefresh.addEventListener('click', () => generateTips(true));
-      generateTips(false);
+
+      // Data-aware starter chips (rule-based, no key needed) + cached AI extras
+      renderSuggestedQuestions();
+      runAiExtras();
 
       if (activeKey()) hideKeyGate(); else showKeyGate();
     }

@@ -745,3 +745,23 @@ function autoInsights(runs, wellness, snapshot, ref = new Date()) {
   }
   return ins.slice(0, 6);
 }
+
+/* Data-aware starter questions for the chat (rule-based, instant, free). */
+function suggestedQuestions(runs, wellness, snapshot, ref = new Date()) {
+  const qs = [];
+  const hrv7 = wellnessAvg(wellness, 7, w => w.hrv && w.hrv.last_night_avg, ref);
+  const hrv28 = wellnessAvg(wellness, 28, w => w.hrv && w.hrv.last_night_avg, ref);
+  if (hrv7 != null && hrv28 != null && hrv28 - hrv7 >= 3) qs.push("Pourquoi ma HRV baisse-t-elle en ce moment ?");
+  const sl7 = wellnessAvg(wellness, 7, w => w.sleep && w.sleep.total / 3600, ref);
+  if (sl7 != null && sl7 < 7) qs.push("Comment récupérer malgré mon manque de sommeil ?");
+  const a = acwr(runs, ref);
+  if (a && a.ratio > 1.3) qs.push("Ma charge grimpe vite, dois-je lever le pied ?");
+  const longest = runs.reduce((m, r) => Math.max(m, r.distance / 1000), 0);
+  if (longest >= 18) qs.push("Suis-je prêt pour un semi-marathon ?");
+  else if (longest >= 8) qs.push("Suis-je prêt pour un 10 km rapide ?");
+  const fit = fitnessStatus(runs, ref);
+  if (fit.trend < -0.5) qs.push("Ma forme baisse, comment relancer la progression ?");
+  qs.push("Que devrais-je faire cette semaine, vu mes données ?");
+  qs.push("Où est ma plus grosse marge de progression ?");
+  return [...new Set(qs)].slice(0, 3);
+}
