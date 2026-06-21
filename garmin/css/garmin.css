@@ -585,10 +585,53 @@ img { max-width: 100%; display: block; }
 
 /* ------------------------------------------------------------------ Mobile (iPhone) */
 @media (max-width: 640px) {
-  /* Header: stack and center instead of spreading items to the left edge. */
-  .topbar-inner { flex-direction: column; align-items: center; gap: 0.7rem; }
-  .app-brand { justify-content: center; }
-  .topbar-actions { width: 100%; justify-content: center; gap: 0.5rem; }
+  /* Header: brand centered on top, the four controls on ONE centered line. */
+  .topbar { padding: calc(0.55rem + env(safe-area-inset-top)) 0 0.55rem; }
+  .topbar-inner { flex-direction: column; align-items: center; gap: 0.5rem; }
+  .app-brand { justify-content: center; font-size: 0.95rem; }
+  .topbar-actions { width: 100%; justify-content: center; flex-wrap: nowrap; gap: 0.3rem; }
+  .topbar-actions .btn-sm { padding: 0.4rem 0.5rem; font-size: 0.7rem; border-radius: 7px; white-space: nowrap; }
+  .profile-switcher { padding: 0.12rem 0.2rem 0.12rem 0.3rem; }
+  .profile-switcher img { width: 20px; height: 20px; }
+  .profile-switcher select { font-size: 0.74rem; max-width: 92px; padding: 0.15rem 1.25rem 0.15rem 0.35rem; }
+
+  /* Metrics: 4 per row, compact, so the key numbers fit without scrolling. */
+  .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
+  .metric-card { padding: 0.6rem 0.35rem; border-radius: 12px; border-top-width: 2px; text-align: center; }
+  .metric-icon { font-size: 1rem; }
+  .metric-label { font-size: 0.52rem; letter-spacing: 0.02em; margin: 0.3rem 0 0.15rem; }
+  .metric-value { font-size: 1.15rem; }
+  .metric-value small { font-size: 0.6rem; }
+  .metric-sub { display: none; }
+
+  /* Charts: two per row instead of one, shorter — tap a chart to enlarge it. */
+  .charts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  .chart-card { padding: 0.7rem 0.6rem; }
+  .chart-card.wide { grid-column: auto; }
+  .chart-wrap { height: 150px; }
+  .chart-card h3, .chart-head h3 { font-size: 0.8rem; }
+  .chart-card .chart-sub, .chart-head .chart-sub { display: none; }
+  .chart-card::after {
+    content: "tap pour agrandir"; display: block; margin-top: 0.4rem;
+    font-family: var(--font-mono); font-size: 0.58rem; color: var(--text-faint); text-align: center;
+  }
+
+  /* A chart enlarged on tap (full-screen modal). */
+  .chart-card.zoomed {
+    position: fixed; inset: 5vh 3vw auto; max-height: 90vh; z-index: 300; margin: 0;
+    overflow-y: auto; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7); padding: 1rem;
+  }
+  .chart-card.zoomed .chart-wrap { height: 62vh; }
+  .chart-card.zoomed h3, .chart-card.zoomed .chart-head h3 { font-size: 1rem; }
+  .chart-card.zoomed .chart-sub { display: block; }
+  .chart-card.zoomed::after { display: none; }
+  .chart-zoom-backdrop { position: fixed; inset: 0; z-index: 290; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(2px); }
+  .chart-zoom-close {
+    position: fixed; top: calc(1rem + env(safe-area-inset-top)); right: 1rem; z-index: 310;
+    width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
+    background: var(--accent); color: #00121c; font-size: 1.2rem; font-weight: 700;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  }
 }
 
 @media (max-width: 600px) {

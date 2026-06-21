@@ -694,6 +694,45 @@
     catch (err) { showError(err.message); btn.disabled = false; btn.textContent = '↻ Synchroniser'; }
   });
 
+  /* ---------------- Mobile: tap a chart to enlarge it ---------------- */
+
+  (function setupChartZoom() {
+    const mq = window.matchMedia('(max-width: 640px)');
+    let backdrop = null, closeBtn = null;
+
+    function close() {
+      document.querySelectorAll('.chart-card.zoomed').forEach(c => c.classList.remove('zoomed'));
+      if (backdrop) { backdrop.remove(); backdrop = null; }
+      if (closeBtn) { closeBtn.remove(); closeBtn = null; }
+      document.body.style.overflow = '';
+      window.dispatchEvent(new Event('resize'));   // let Chart.js re-fit
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!mq.matches) return;
+      const card = e.target.closest('.chart-card');
+      if (!card || card.classList.contains('zoomed')) return;          // already open: let tooltips work
+      if (e.target.closest('button, a, select, .range-toggle')) return; // don't zoom when using a control
+
+      close();
+      card.classList.add('zoomed');
+      backdrop = document.createElement('div');
+      backdrop.className = 'chart-zoom-backdrop';
+      backdrop.addEventListener('click', close);
+      closeBtn = document.createElement('button');
+      closeBtn.className = 'chart-zoom-close';
+      closeBtn.setAttribute('aria-label', 'Fermer');
+      closeBtn.textContent = '✕';
+      closeBtn.addEventListener('click', close);
+      document.body.appendChild(backdrop);
+      document.body.appendChild(closeBtn);
+      document.body.style.overflow = 'hidden';
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    if (mq.addEventListener) mq.addEventListener('change', () => { if (!mq.matches) close(); });
+  })();
+
   /* ---------------- Boot ---------------- */
 
   (async function boot() {
