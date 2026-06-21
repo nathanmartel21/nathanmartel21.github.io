@@ -2,7 +2,7 @@
    Caches the app shell so the dashboard opens offline. User data lives in
    localStorage and POSTs to the relay backend are never cached. */
 
-const VERSION = 'garmin-pwa-v1';
+const VERSION = 'garmin-pwa-v2';
 const CORE_CACHE = `${VERSION}-core`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 

@@ -583,7 +583,19 @@ img { max-width: 100%; display: block; }
 .ai-chat-input textarea { flex: 1; resize: none; padding: 0.65rem 0.85rem; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: var(--font-body); font-size: 0.92rem; line-height: 1.4; max-height: 160px; }
 .ai-chat-input textarea:focus { border-color: var(--accent); outline: none; }
 
+/* ------------------------------------------------------------------ Mobile (iPhone) */
+@media (max-width: 640px) {
+  /* Header: stack and center instead of spreading items to the left edge. */
+  .topbar-inner { flex-direction: column; align-items: center; gap: 0.7rem; }
+  .app-brand { justify-content: center; }
+  .topbar-actions { width: 100%; justify-content: center; gap: 0.5rem; }
+}
+
 @media (max-width: 600px) {
   .ai-msg-body { max-width: 95%; }
   .ai-card { padding: 1rem; }
+
+  /* Passphrase / key rows: field on top, full-width button below. */
+  .ai-gate-row { flex-direction: column; align-items: stretch; }
+  .ai-gate-row .btn { width: 100%; }
 }
