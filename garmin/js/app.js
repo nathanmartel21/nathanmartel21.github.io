@@ -144,7 +144,7 @@
     const hrv = latestWellness(wellness, 'hrv');
     if (hrv && hrv.hrv && hrv.hrv.weekly_avg != null) cards.push(metricCard('c-hrv', '📈', 'HRV', `${hrv.hrv.weekly_avg}<small> ms</small>`, (hrv.hrv.status || '').toLowerCase() || 'moy. semaine'));
 
-    if (snapshot.training_status) cards.push(metricCard('c-vo2', '⚙️', 'Training Status', `<span style="font-size:1.1rem">${String(snapshot.training_status).replace(/_/g, ' ').toLowerCase()}</span>`, 'statut Garmin'));
+    if (snapshot.training_status) cards.push(metricCard('c-vo2', '⚙️', 'Training Status', `<span class="metric-status">${String(snapshot.training_status).replace(/_/g, ' ').toLowerCase()}</span>`, 'statut Garmin'));
 
     grid.innerHTML = cards.join('') || '<p class="metric-sub">Pas de métriques de récupération dans ces données.</p>';
   }

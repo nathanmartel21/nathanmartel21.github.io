@@ -270,6 +270,7 @@ img { max-width: 100%; display: block; }
 .metric-label { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin: 0.5rem 0 0.3rem; }
 .metric-value { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; margin: 0; line-height: 1.1; }
 .metric-value small { font-size: 0.9rem; color: var(--text-muted); font-weight: 600; }
+.metric-value .metric-status { font-size: 1.1rem; }
 .metric-sub { font-size: 0.8rem; color: var(--text-muted); margin: 0.35rem 0 0; }
 
 /* Suggestion card (run of the day) */
@@ -589,19 +590,21 @@ img { max-width: 100%; display: block; }
   .topbar { padding: calc(0.55rem + env(safe-area-inset-top)) 0 0.55rem; }
   .topbar-inner { flex-direction: column; align-items: center; gap: 0.5rem; }
   .app-brand { justify-content: center; font-size: 0.95rem; }
-  .topbar-actions { width: 100%; justify-content: center; flex-wrap: nowrap; gap: 0.3rem; }
+  .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 0.3rem; }
   .topbar-actions .btn-sm { padding: 0.4rem 0.5rem; font-size: 0.7rem; border-radius: 7px; white-space: nowrap; }
+  .topbar-actions > * { max-width: 100%; }
   .profile-switcher { padding: 0.12rem 0.2rem 0.12rem 0.3rem; }
   .profile-switcher img { width: 20px; height: 20px; }
   .profile-switcher select { font-size: 0.74rem; max-width: 92px; padding: 0.15rem 1.25rem 0.15rem 0.35rem; }
 
   /* Metrics: 4 per row, compact, so the key numbers fit without scrolling. */
   .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
-  .metric-card { padding: 0.6rem 0.35rem; border-radius: 12px; border-top-width: 2px; text-align: center; }
+  .metric-card { padding: 0.6rem 0.35rem; border-radius: 12px; border-top-width: 2px; text-align: center; min-width: 0; overflow-wrap: anywhere; }
   .metric-icon { font-size: 1rem; }
   .metric-label { font-size: 0.52rem; letter-spacing: 0.02em; margin: 0.3rem 0 0.15rem; }
   .metric-value { font-size: 1.15rem; }
   .metric-value small { font-size: 0.6rem; }
+  .metric-value .metric-status { font-size: 0.72rem; line-height: 1.2; }
   .metric-sub { display: none; }
 
   /* Charts: two per row instead of one, shorter — tap a chart to enlarge it. */
@@ -611,6 +614,11 @@ img { max-width: 100%; display: block; }
   .chart-wrap { height: 150px; }
   .chart-card h3, .chart-head h3 { font-size: 0.8rem; }
   .chart-card .chart-sub, .chart-head .chart-sub { display: none; }
+  /* Range toggles (7J/14J/30J…): let them wrap and shrink so they stay inside the card. */
+  .chart-head { flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
+  .chart-head h3 { min-width: 0; }
+  .range-toggle { padding: 1px; flex-wrap: wrap; }
+  .range-toggle button { padding: 0.2rem 0.38rem; font-size: 0.62rem; }
   .chart-card::after {
     content: "tap pour agrandir"; display: block; margin-top: 0.4rem;
     font-family: var(--font-mono); font-size: 0.58rem; color: var(--text-faint); text-align: center;
@@ -632,6 +640,14 @@ img { max-width: 100%; display: block; }
     background: var(--accent); color: #00121c; font-size: 1.2rem; font-weight: 700;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   }
+
+  /* Personal records: 2 per row, compact. */
+  .records-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  .record-card { padding: 0.8rem 0.85rem; min-width: 0; overflow-wrap: anywhere; }
+  .record-card .trophy { top: 0.7rem; right: 0.7rem; font-size: 0.95rem; }
+  .record-name { font-size: 0.6rem; margin-bottom: 0.35rem; }
+  .record-value { font-size: 1.15rem; }
+  .record-detail { font-size: 0.68rem; margin-top: 0.25rem; }
 }
 
 @media (max-width: 600px) {
