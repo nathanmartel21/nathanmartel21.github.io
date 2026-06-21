@@ -60,7 +60,8 @@ img { max-width: 100%; display: block; }
   background: rgba(10, 14, 20, 0.88);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
-  padding: 0.85rem 0;
+  /* Standalone PWA (iOS): keep the header clear of the notch / status bar. */
+  padding: calc(0.85rem + env(safe-area-inset-top)) 0 0.85rem;
 }
 .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 
