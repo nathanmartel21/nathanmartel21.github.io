@@ -1,0 +1,23 @@
+{
+  "name": "Garmin Premium — Nathan Martel",
+  "short_name": "Garmin Pro",
+  "description": "Dashboard d'entraînement et de récupération construit sur Garmin Connect : activités, sommeil, stress, Body Battery, VO2max, readiness et coach IA.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "categories": ["health", "fitness", "sports"],
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "icons-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icons-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icons-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Ouvrir le dashboard", "url": "./app.html", "icons": [{ "src": "icons-192.png", "sizes": "192x192" }] }
+  ]
+}
