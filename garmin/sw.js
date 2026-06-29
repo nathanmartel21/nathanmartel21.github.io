@@ -19,7 +19,7 @@ const CORE_ASSETS = [
   './icons-192.png',
   './icons-512.png',
   './apple-touch-icon.png',
-  './css/garmin.css?v=7',
+  './css/garmin.css?v=8',
   './js/config.js?v=7',
   './js/api.js?v=7',
   './js/import.js?v=7',

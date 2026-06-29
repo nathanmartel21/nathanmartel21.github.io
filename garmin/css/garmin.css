@@ -316,8 +316,11 @@ img { max-width: 100%; display: block; }
 /* Race goal, projections & best efforts */
 .race-goal-card { background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 1.4rem 1.6rem; margin-bottom: 1.25rem; }
 .race-goal-set { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: flex-end; }
-.race-goal-set input[type="text"], .race-goal-set input[type="number"], .race-goal-set input[type="date"] { background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0.55rem 0.8rem; color: var(--text); font-family: var(--font-mono); font-size: 0.9rem; outline: none; }
-.race-goal-set input:focus { border-color: var(--accent); }
+.race-goal-set input[type="text"], .race-goal-set input[type="number"], .race-goal-set input[type="date"],
+.race-goal-set select { background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0.55rem 0.8rem; color: var(--text); font-family: var(--font-mono); font-size: 0.9rem; outline: none; }
+.race-goal-set select { padding-right: 2rem; font-family: var(--font-body); font-weight: 600; }
+.race-goal-set input:focus, .race-goal-set select:focus { border-color: var(--accent); }
+.race-goal-set input[type="date"] { color-scheme: dark; }
 .race-goal-main { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; }
 .race-goal-countdown { font-family: var(--font-display); font-size: 2.2rem; font-weight: 700; color: var(--accent-bright); line-height: 1; min-width: 4ch; }
 .race-goal-countdown[data-phase="race"], .race-goal-countdown[data-phase="peak"] { color: var(--green); }
