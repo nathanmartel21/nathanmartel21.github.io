@@ -316,14 +316,6 @@ function fitnessStatus(runs, ref = new Date()) {
   return { score, label, trend, form, fitness: last.fitness, advice };
 }
 
-const WEEK_TEMPLATES = {
-  1: ['Endurance'], 2: ['Endurance', 'Sortie longue'], 3: ['Endurance', 'Tempo', 'Sortie longue'],
-  4: ['Endurance', 'Fractionné', 'Allure course', 'Sortie longue'],
-  5: ['Endurance', 'Fractionné', 'Endurance', 'Allure course', 'Sortie longue'],
-  6: ['Récup', 'Fractionné', 'Endurance', 'Allure course', 'Endurance', 'Sortie longue'],
-  7: ['Récup', 'Fractionné', 'Endurance', 'Allure course', 'Endurance', 'Tempo', 'Sortie longue']
-};
-
 function racePaceOffsets(km) {
   if (km <= 6) return { easy: 75, long: 85, tempo: 18, threshold: 12, interval: -8 };
   if (km <= 15) return { easy: 62, long: 78, tempo: 12, threshold: 2, interval: -15 };
@@ -344,68 +336,6 @@ function fmtClock(seconds) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   return `${m}:${String(sec).padStart(2, '0')}`;
-}
-
-function buildTrainingPlan(runs, opts = {}) {
-  const ref = opts.ref || new Date();
-  const sessions = Math.max(1, Math.min(7, opts.sessionsPerWeek || 4));
-  const zones = estimateZones(runs, ref) || { easy: 360, threshold: 300, interval: 260 };
-  const stats = periodStats(runs, ref);
-  const round = v => Math.max(3, Math.round(v));
-  const avgDist = stats.last28.count ? Math.max(stats.last28.km / stats.last28.count, 4) : 6;
-  const last90 = runs.filter(r => inLastDays(r, 90, ref));
-  const longest90 = Math.max(...last90.map(r => r.distance / 1000), avgDist * 1.4);
-  const isRace = opts.objective === 'race' && opts.raceKm > 0 && opts.targetSeconds > 0;
-
-  if (!isRace) {
-    const progression = opts.objective === 'progression';
-    const vf = progression ? 1.1 : 1.0;
-    const longTarget = Math.min(longest90 * (progression ? 1.15 : 1.0), avgDist * 2 + 4);
-    const roles = WEEK_TEMPLATES[sessions].map(r => (r === 'Allure course' ? 'Endurance' : r));
-    const detail = role => {
-      switch (role) {
-        case 'Sortie longue': return { dist: round(longTarget), pace: fmtPace(zones.easy + 10), focus: 'Endurance, allure souple — on cherche la durée.' };
-        case 'Tempo': return { dist: round(avgDist * vf), pace: `${fmtPace(zones.threshold)} sur les blocs`, focus: '15 min échauffement + 2×10 min au seuil (récup 3 min) + retour au calme.' };
-        case 'Fractionné': return { dist: round(avgDist * 0.9 * vf), pace: `${fmtPace(zones.interval)} sur les fractions`, focus: '15 min échauffement + 8×400 m vite (récup 1 min) + retour au calme.' };
-        case 'Récup': return { dist: round(avgDist * 0.6), pace: fmtPace(zones.easy + 30), focus: 'Footing très léger de récupération active.' };
-        default: return { dist: round(avgDist * vf), pace: fmtPace(zones.easy), focus: 'Endurance fondamentale, allure conversationnelle.' };
-      }
-    };
-    const plan = roles.map(role => ({ type: role, ...detail(role) }));
-    return { mode: 'fitness', objectiveLabel: progression ? 'Progression du volume' : 'Forme générale', sessionsPerWeek: sessions, weeklyKm: plan.reduce((s, p) => s + (p.dist || p.distance), 0), sessions: plan.map(p => ({ type: p.type, distance: p.dist, pace: p.pace, focus: p.focus })) };
-  }
-
-  const raceKm = opts.raceKm;
-  const racePace = opts.targetSeconds / raceKm;
-  const off = racePaceOffsets(raceKm);
-  const pace = { easy: racePace + off.easy, long: racePace + off.long, tempo: racePace + off.tempo, threshold: racePace + off.threshold, interval: racePace + off.interval, race: racePace };
-  let longTarget;
-  if (raceKm <= 6) longTarget = Math.min(Math.max(avgDist * 1.5, 8), 14);
-  else if (raceKm <= 15) longTarget = Math.min(Math.max(avgDist * 1.6, 12), 18);
-  else if (raceKm <= 30) longTarget = Math.min(Math.max(longest90 * 1.1, 16), 24);
-  else longTarget = Math.min(Math.max(longest90 * 1.1, 24), 34);
-  const detail = role => {
-    switch (role) {
-      case 'Sortie longue': return { dist: round(longTarget), pace: fmtPace(pace.long), focus: raceKm > 15 ? 'Endurance longue, derniers km à allure course.' : 'Endurance longue, allure souple.' };
-      case 'Allure course': return { dist: round(Math.max(avgDist, raceKm <= 15 ? raceKm * 0.7 : 10)), pace: `${fmtPace(pace.race)} (allure objectif)`, focus: `Bloc spécifique à l’allure visée (${fmtPace(pace.race)}) pour mémoriser le rythme de course.` };
-      case 'Tempo': return { dist: round(avgDist), pace: `${fmtPace(pace.threshold)} au seuil`, focus: '15 min échauffement + 2×12 min au seuil (récup 3 min) + retour au calme.' };
-      case 'Fractionné': return { dist: round(avgDist * 0.9), pace: `${fmtPace(pace.interval)} sur les fractions`, focus: '15 min échauffement + 6×600 m rapides (récup 90 s) + retour au calme.' };
-      case 'Récup': return { dist: round(avgDist * 0.6), pace: fmtPace(pace.easy + 25), focus: 'Footing de récupération active.' };
-      default: return { dist: round(avgDist), pace: fmtPace(pace.easy), focus: 'Endurance fondamentale, allure facile.' };
-    }
-  };
-  const plan = WEEK_TEMPLATES[sessions].map(role => { const d = detail(role); return { type: role, distance: d.dist, pace: d.pace, focus: d.focus }; });
-  const predicted = predictRaceTime(runs, raceKm, ref);
-  let feasibility = { label: 'À évaluer', detail: 'Pas assez de courses récentes pour estimer.' };
-  if (predicted) {
-    const ratio = opts.targetSeconds / predicted;
-    const predStr = fmtClock(predicted);
-    if (ratio >= 1.04) feasibility = { label: 'Confortable', tone: 'good', detail: `Ton niveau actuel projette ~${predStr}. L’objectif a de la marge.` };
-    else if (ratio >= 0.99) feasibility = { label: 'Réaliste', tone: 'good', detail: `Cohérent avec ta forme actuelle (projection ~${predStr}).` };
-    else if (ratio >= 0.95) feasibility = { label: 'Ambitieux', tone: 'warn', detail: `Au-dessus de ta forme actuelle (projection ~${predStr}). Tenable avec une bonne prépa.` };
-    else feasibility = { label: 'Très ambitieux', tone: 'bad', detail: `Bien plus rapide que ta forme actuelle (projection ~${predStr}). Vise une progression par étapes.` };
-  }
-  return { mode: 'race', objectiveLabel: `${opts.raceLabel || (raceKm + ' km')} en ${fmtClock(opts.targetSeconds)}`, racePace, racePaceStr: fmtPace(racePace), feasibility, weeksToRace: opts.weeksToRace > 0 ? opts.weeksToRace : null, sessionsPerWeek: sessions, weeklyKm: plan.reduce((s, p) => s + p.distance, 0), sessions: plan };
 }
 
 function suggestRun(runs, ref = new Date()) {

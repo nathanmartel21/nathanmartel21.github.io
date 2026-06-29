@@ -93,17 +93,35 @@
     else $('profile-avatar').hidden = true;
   }
 
-  /* ---------------- Recommendation of the day ---------------- */
+  /* ---------------- Daily session (recovery + workout + weather) ---------------- */
 
-  function renderReco(runs, wellness, snapshot) {
+  /* One merged card: the recovery verdict (ring + level) drives the colour, the
+     concrete workout (suggestRun) fills the body, and the weather adds a one-liner
+     plus, in extreme heat with no good window, an override toward shifting/resting. */
+  function renderDaily(runs, wellness, snapshot, weatherAnalysis) {
     const reco = buildRecommendation(runs, wellness, snapshot);
+    const sug = suggestRun(runs);
     const card = $('reco-card');
     card.setAttribute('data-level', reco.level);
     $('reco-score').textContent = reco.recovery;
     $('reco-ring').style.setProperty('--p', reco.recovery);
-    $('reco-title').textContent = reco.title;
-    $('reco-desc').textContent = reco.desc;
-    $('reco-factors').innerHTML = reco.factors.map(f => `<span class="pill">${f}</span>`).join('');
+    $('sug-type').textContent = sug.type;
+    $('sug-title').textContent = sug.title;
+    $('sug-desc').textContent = sug.desc;
+    $('sug-distance').textContent = sug.distance;
+    $('sug-pace').textContent = sug.pace;
+    $('sug-reason').textContent = sug.reason;
+    $('reco-line').textContent = `🔋 Récup ${reco.recovery}/100 — ${reco.title}`;
+
+    const wEl = $('daily-weather');
+    if (weatherAnalysis) {
+      const w = weatherAnalysis;
+      wEl.hidden = false;
+      wEl.textContent = w.discourage ? `${w.icon} ${w.advice}` : w.oneLiner;
+      wEl.setAttribute('data-verdict', w.verdict);
+    } else {
+      wEl.hidden = true;
+    }
   }
 
   /* ---------------- Key metrics ---------------- */
@@ -149,16 +167,88 @@
     grid.innerHTML = cards.join('') || '<p class="metric-sub">Pas de métriques de récupération dans ces données.</p>';
   }
 
-  /* ---------------- Run of the day ---------------- */
+  /* ---------------- Weather & run windows ---------------- */
 
-  function renderSuggestion(runs) {
-    const sug = suggestRun(runs);
-    $('sug-type').innerHTML = `${sug.type}<small>séance du jour</small>`;
-    $('sug-title').textContent = sug.title;
-    $('sug-desc').textContent = sug.desc;
-    $('sug-distance').textContent = sug.distance;
-    $('sug-pace').textContent = sug.pace;
-    $('sug-reason').textContent = sug.reason;
+  function rangeChip(label, cls) { return `<span class="weather-window ${cls}">${label}</span>`; }
+  function fmtWin([a, b]) { return `${a}h–${b + 1}h`; }
+
+  /* Renders the dedicated weather card. `weather` is the normalized forecast (or
+     null), `analysis` the run-window analysis (or null). When no city is set, the
+     card shows an inline "set city" form. Returns nothing; re-fetches on demand. */
+  function renderWeatherCard(weather, analysis) {
+    const card = $('weather-card');
+    const empty = $('weather-empty');
+    const body = $('weather-body');
+    const city = Weather.getCity();
+
+    if (!city || !weather) {
+      card.setAttribute('data-state', 'empty');
+      empty.hidden = false;
+      body.hidden = true;
+      $('weather-city-input').value = city || '';
+      return;
+    }
+
+    card.setAttribute('data-state', analysis ? analysis.verdict : 'ok');
+    empty.hidden = true;
+    body.hidden = false;
+    $('weather-place').textContent = weather.label || city;
+    const now = weather.now && weather.now.temp != null ? Math.round(weather.now.temp) : '–';
+    $('weather-temp').innerHTML = `${now}<small>°C</small>`;
+    const max = weather.tempMax != null ? Math.round(weather.tempMax) : null;
+    const min = weather.tempMin != null ? Math.round(weather.tempMin) : null;
+    $('weather-range').textContent = (max != null && min != null) ? `max ${max}° · min ${min}°` : '';
+
+    $('weather-advice').innerHTML = analysis ? `${analysis.icon} ${analysis.advice}` : '';
+
+    const windows = $('weather-windows');
+    if (analysis) {
+      const chips = [];
+      analysis.bestWindows.forEach(w => chips.push(rangeChip(`✅ ${fmtWin(w)}`, 'good')));
+      analysis.rainWindows.forEach(w => chips.push(rangeChip(`🌧️ ${fmtWin(w)}`, 'rain')));
+      analysis.hotWindows.forEach(w => chips.push(rangeChip(`🥵 ${fmtWin(w)}`, 'hot')));
+      windows.innerHTML = chips.length ? chips.join('') : '<span class="weather-window">Pas de créneau franc aujourd’hui.</span>';
+    } else {
+      windows.innerHTML = '';
+    }
+  }
+
+  /* Loads weather for the active profile and renders both the weather card and the
+     daily-session weather line. Tolerant: any failure leaves the rest intact. */
+  async function loadAndRenderWeather(runs, wellness, snapshot) {
+    let weather = null, analysis = null;
+    try {
+      weather = await Weather.fetchToday();
+      analysis = Weather.analyzeForRun(weather);
+    } catch (err) {
+      const msg = $('weather-msg');
+      if (msg && Weather.getCity()) msg.textContent = err.message === 'city-not-found'
+        ? '❌ Ville introuvable — vérifie l’orthographe.'
+        : '⚠️ Météo indisponible pour le moment.';
+    }
+    renderWeatherCard(weather, analysis);
+    // refresh the daily card's weather line now that we have data
+    const wEl = $('daily-weather');
+    if (analysis) { wEl.hidden = false; wEl.textContent = analysis.discourage ? `${analysis.icon} ${analysis.advice}` : analysis.oneLiner; wEl.setAttribute('data-verdict', analysis.verdict); }
+  }
+
+  function wireWeatherControls(onCityChange) {
+    const submit = () => {
+      const v = $('weather-city-input').value.trim();
+      if (!v) return;
+      $('weather-msg').textContent = '';
+      Weather.setCity(v);
+      onCityChange();
+    };
+    $('weather-city-btn').addEventListener('click', submit);
+    $('weather-city-input').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    $('weather-change-city').addEventListener('click', () => {
+      $('weather-card').setAttribute('data-state', 'empty');
+      $('weather-empty').hidden = false;
+      $('weather-body').hidden = true;
+      $('weather-city-input').value = Weather.getCity();
+      $('weather-city-input').focus();
+    });
   }
 
   /* ---------------- KPIs ---------------- */
@@ -536,69 +626,6 @@
     update();
   }
 
-  const PLAN_OBJECTIVE_OPTIONS = [
-    ['forme', 'Forme générale', null], ['progression', 'Progression du volume', null],
-    ['race5', 'Course : 5 km', 5], ['race10', 'Course : 10 km', 10],
-    ['race21', 'Course : Semi (21,1 km)', 21.1], ['race42', 'Course : Marathon (42,2 km)', 42.2],
-    ['racecustom', 'Course : autre distance…', 'custom']
-  ];
-
-  function planSessionCard(s, index) {
-    return `<div class="plan-session"><div class="plan-session-head"><span class="plan-session-num">J${index + 1}</span><span class="act-type-badge${/endurance|tempo|fractionn|longue|récup|allure/i.test(s.type) ? '' : ' other'}">${s.type}</span></div><p class="plan-session-dist">${s.distance} km</p><p class="plan-session-pace">${s.pace}</p><p class="plan-session-focus">${s.focus}</p></div>`;
-  }
-
-  function defaultSessions(runs) { const stats = periodStats(runs); const perWeek = Math.round(stats.last28.count / 4); return Math.max(2, Math.min(6, perWeek || 4)); }
-  function parseTimeInput(str) { if (!str) return 0; const parts = String(str).trim().split(':').map(Number); if (parts.some(Number.isNaN)) return 0; return parts.reduce((a, p) => a * 60 + p, 0); }
-  function isRaceObjective(o) { return o.startsWith('race'); }
-
-  function renderPlan(runs) {
-    const select = $('plan-objective');
-    select.innerHTML = PLAN_OBJECTIVE_OPTIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-    let sessions = Number(Profile.get(PKEY.planSessions)) || defaultSessions(runs);
-    sessions = Math.max(1, Math.min(7, sessions));
-    select.value = Profile.get(PKEY.planObjective) || 'forme';
-    $('plan-sessions-val').textContent = sessions;
-    $('plan-target-time').value = Profile.get(PKEY.planTargetTime) || '';
-    $('plan-weeks').value = Profile.get(PKEY.planWeeks) || '';
-    $('plan-race-km').value = Profile.get(PKEY.planRaceKm) || '';
-
-    function raceKmFor(value) { const opt = PLAN_OBJECTIVE_OPTIONS.find(o => o[0] === value); const km = opt && opt[2]; if (km === 'custom') return Number($('plan-race-km').value) || 0; return km || 0; }
-    function syncFields(value) { const race = isRaceObjective(value); $('plan-customkm-field').hidden = value !== 'racecustom'; $('plan-time-field').hidden = !race; $('plan-weeks-field').hidden = !race; $('plan-race-summary').hidden = !race; }
-
-    function update() {
-      const s = Number($('plan-sessions-val').textContent);
-      const value = select.value;
-      const objective = isRaceObjective(value) ? 'race' : value;
-      const raceKm = raceKmFor(value);
-      const targetSeconds = parseTimeInput($('plan-target-time').value);
-      const weeks = Number($('plan-weeks').value) || 0;
-      const raceLabel = (PLAN_OBJECTIVE_OPTIONS.find(o => o[0] === value)?.[1] || '').replace('Course : ', '');
-      Profile.set(PKEY.planSessions, String(s));
-      Profile.set(PKEY.planObjective, value);
-      Profile.set(PKEY.planTargetTime, $('plan-target-time').value);
-      Profile.set(PKEY.planWeeks, String(weeks || ''));
-      Profile.set(PKEY.planRaceKm, String($('plan-race-km').value || ''));
-      syncFields(value);
-      const plan = buildTrainingPlan(runs, { sessionsPerWeek: s, objective, raceKm, targetSeconds, weeksToRace: weeks, raceLabel });
-      $('plan-weekly-km').textContent = plan.weeklyKm;
-      $('plan-sessions').innerHTML = plan.sessions.map(planSessionCard).join('');
-      if (plan.mode === 'race') {
-        const needTime = !targetSeconds;
-        $('plan-race-pace').textContent = needTime ? 'saisis un temps' : plan.racePaceStr;
-        const feas = $('plan-feasibility');
-        if (needTime) { $('plan-feas-label').textContent = '⏱ Temps visé requis'; $('plan-feas-detail').textContent = 'Indique le temps visé pour calculer l’allure et la prépa.'; feas.setAttribute('data-tone', 'warn'); }
-        else { $('plan-feas-label').textContent = plan.feasibility.label + (plan.weeksToRace ? ` · ${plan.weeksToRace} sem. de prépa` : ''); $('plan-feas-detail').textContent = plan.feasibility.detail; feas.setAttribute('data-tone', plan.feasibility.tone || 'good'); }
-      }
-    }
-
-    $('plan-minus').onclick = () => { $('plan-sessions-val').textContent = Math.max(1, Number($('plan-sessions-val').textContent) - 1); update(); };
-    $('plan-plus').onclick = () => { $('plan-sessions-val').textContent = Math.min(7, Number($('plan-sessions-val').textContent) + 1); update(); };
-    select.onchange = update;
-    ['plan-target-time', 'plan-weeks', 'plan-race-km'].forEach(id => $(id).addEventListener('input', update));
-    syncFields(select.value);
-    update();
-  }
-
   function renderActivities(activities) {
     const tbody = $('activities-body');
     const moreBtn = $('more-activities-btn');
@@ -623,12 +650,15 @@
     const runs = runsOnly(activities);
 
     renderSwitcher(data.athlete);
-    renderReco(runs, wellness, snapshot);
+    renderDaily(runs, wellness, snapshot, null);
     renderInsights(runs, wellness, snapshot);
     renderMetrics(runs, wellness, snapshot);
-    renderSuggestion(runs);
-    renderPlan(runs);
     if (window.AICoach) AICoach.mount({ activities, wellness, snapshot });
+
+    /* Weather (async, non-blocking): fills the weather card + the daily-session
+       weather line once Open-Meteo responds. */
+    wireWeatherControls(() => loadAndRenderWeather(runs, wellness, snapshot));
+    loadAndRenderWeather(runs, wellness, snapshot);
     renderCondition(runs);
     renderLoadRisk(runs, wellness);
     renderCorrelations(activities, wellness);

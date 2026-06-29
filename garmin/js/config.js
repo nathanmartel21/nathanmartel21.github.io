@@ -28,11 +28,7 @@ const PKEY = {
   lastSync: 'last_sync',
   weeklyGoal: 'weekly_goal',
   syncDays: 'sync_days',
-  planSessions: 'plan_sessions',
-  planObjective: 'plan_objective',
-  planTargetTime: 'plan_target_time',
-  planWeeks: 'plan_weeks',
-  planRaceKm: 'plan_race_km'
+  city: 'city'                        // athlete's city, for the weather planner
 };
 
 const DEMO_ID = 'demo';

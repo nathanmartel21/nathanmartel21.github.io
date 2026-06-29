@@ -29,25 +29,11 @@
   ];
   const DEFAULT_MODEL = FREE_MODELS[0].id;
 
-  /* ---------------- Crypto ---------------- */
+  /* ---------------- Crypto ----------------
+     Decryption + the device-key storage name live in ai-unlock.js (window.AiUnlock),
+     shared with the login transition page so they never drift. */
 
-  function b64ToBuf(b64) {
-    const bin = atob(b64);
-    const buf = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    return buf;
-  }
-
-  async function decryptKey(blob, passphrase) {
-    const enc = new TextEncoder();
-    const base = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
-    const aesKey = await crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt: b64ToBuf(blob.salt), iterations: blob.iter || 250000, hash: 'SHA-256' },
-      base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
-    );
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBuf(blob.iv) }, aesKey, b64ToBuf(blob.ct));
-    return new TextDecoder().decode(plain);
-  }
+  function decryptKey(blob, passphrase) { return window.AiUnlock.decryptKey(blob, passphrase); }
 
   /* ---------------- Key resolution ---------------- */
 

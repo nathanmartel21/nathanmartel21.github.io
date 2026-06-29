@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/garmin.css?v=4" />
+    <link rel="stylesheet" href="css/garmin.css?v=5" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
     <!-- PWA -->
     <meta name="theme-color" content="#0a0e14" />
@@ -49,20 +49,52 @@
       <div class="status-msg" id="dash-status"></div>
 
       <div class="dash-content" id="dash-content">
-        <!-- AI recommendation of the day -->
+        <!-- Daily session: recovery verdict + concrete workout + weather one-liner -->
         <section class="dash-section">
-          <div class="reco-card" id="reco-card" data-level="steady">
+          <div class="daily-card" id="reco-card" data-level="steady">
             <div class="reco-ring" id="reco-ring">
               <div class="reco-ring-inner">
                 <span class="reco-ring-score" id="reco-score">–</span>
                 <span class="reco-ring-label">récup</span>
               </div>
             </div>
-            <div>
-              <p class="reco-label">🤖 Recommandation du jour</p>
-              <h2 class="reco-title" id="reco-title">…</h2>
-              <p class="reco-desc" id="reco-desc"></p>
-              <div class="reco-factors" id="reco-factors"></div>
+            <div class="daily-body">
+              <p class="reco-label">🎯 Séance du jour <span class="daily-type" id="sug-type"></span></p>
+              <h2 class="suggestion-title" id="sug-title">…</h2>
+              <p class="suggestion-desc" id="sug-desc"></p>
+              <div class="suggestion-meta">
+                <span class="pill"><span class="pill-label">Distance</span><span id="sug-distance"></span></span>
+                <span class="pill"><span class="pill-label">Allure</span><span id="sug-pace"></span></span>
+                <span class="pill"><span class="pill-label">Pourquoi</span><span id="sug-reason"></span></span>
+              </div>
+              <p class="daily-reco" id="reco-line"></p>
+              <p class="daily-weather" id="daily-weather" hidden></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Weather & run windows -->
+        <section class="dash-section" id="weather-section">
+          <h2 class="dash-section-title">🌦️ Météo &amp; créneaux <span class="hint" id="weather-city-hint">meilleurs moments pour courir aujourd’hui</span></h2>
+          <div class="weather-card" id="weather-card" data-state="empty">
+            <div class="weather-empty" id="weather-empty">
+              <p class="weather-empty-text">Renseigne ta ville pour des suggestions de créneaux adaptées à la météo (pluie, chaleur).</p>
+              <div class="weather-city-row">
+                <input id="weather-city-input" type="text" placeholder="ex. Paris" autocomplete="off" />
+                <button class="btn btn-accent btn-sm" id="weather-city-btn">Valider</button>
+              </div>
+              <p class="weather-msg" id="weather-msg"></p>
+            </div>
+            <div class="weather-body" id="weather-body" hidden>
+              <div class="weather-head">
+                <div class="weather-main">
+                  <span class="weather-temp" id="weather-temp">–</span>
+                  <span class="weather-range" id="weather-range"></span>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="weather-change-city" title="Changer de ville">📍 <span id="weather-place"></span></button>
+              </div>
+              <p class="weather-advice" id="weather-advice"></p>
+              <div class="weather-windows" id="weather-windows"></div>
             </div>
           </div>
         </section>
@@ -86,73 +118,6 @@
         <section class="dash-section">
           <h2 class="dash-section-title">Métriques clés <span class="hint">ton état Garmin en un coup d’œil</span></h2>
           <div class="metric-grid" id="metric-grid"></div>
-        </section>
-
-        <!-- Run of the day -->
-        <section class="dash-section">
-          <div class="suggestion-card" id="suggestion-card">
-            <div>
-              <p class="suggestion-label">🎯 Séance du jour — suggestion</p>
-              <h2 class="suggestion-title" id="sug-title"></h2>
-              <p class="suggestion-desc" id="sug-desc"></p>
-              <div class="suggestion-meta">
-                <span class="pill"><span class="pill-label">Distance</span><span id="sug-distance"></span></span>
-                <span class="pill"><span class="pill-label">Allure</span><span id="sug-pace"></span></span>
-                <span class="pill"><span class="pill-label">Pourquoi</span><span id="sug-reason"></span></span>
-              </div>
-            </div>
-            <div class="suggestion-type" id="sug-type"></div>
-          </div>
-        </section>
-
-        <!-- Training program -->
-        <section class="dash-section">
-          <h2 class="dash-section-title">Programme d’entraînement <span class="hint">généré selon ta forme actuelle</span></h2>
-          <div class="plan-card">
-            <div class="plan-controls">
-              <div class="plan-field">
-                <label for="plan-objective">Objectif</label>
-                <select id="plan-objective"></select>
-              </div>
-              <div class="plan-field" id="plan-customkm-field" hidden>
-                <label for="plan-race-km">Distance (km)</label>
-                <input id="plan-race-km" type="number" min="1" max="200" step="0.1" placeholder="ex. 15" />
-              </div>
-              <div class="plan-field" id="plan-time-field" hidden>
-                <label for="plan-target-time">Temps visé</label>
-                <input id="plan-target-time" type="text" inputmode="numeric" placeholder="hh:mm:ss" />
-              </div>
-              <div class="plan-field" id="plan-weeks-field" hidden>
-                <label for="plan-weeks">Course dans</label>
-                <div class="weeks-input">
-                  <input id="plan-weeks" type="number" min="1" max="52" step="1" placeholder="8" />
-                  <span>sem.</span>
-                </div>
-              </div>
-              <div class="plan-field">
-                <label>Séances / semaine</label>
-                <div class="stepper">
-                  <button type="button" id="plan-minus" aria-label="Moins">−</button>
-                  <span id="plan-sessions-val">4</span>
-                  <button type="button" id="plan-plus" aria-label="Plus">+</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="plan-race-summary" id="plan-race-summary" hidden>
-              <div class="plan-pace-box">
-                <span class="plan-pace-label">Allure cible</span>
-                <span class="plan-pace-value" id="plan-race-pace">–</span>
-              </div>
-              <div class="plan-feasibility" id="plan-feasibility" data-tone="good">
-                <span class="plan-feas-label" id="plan-feas-label">–</span>
-                <span class="plan-feas-detail" id="plan-feas-detail"></span>
-              </div>
-            </div>
-
-            <p class="plan-volume-note"><strong id="plan-weekly-km">0</strong> km planifiés / semaine</p>
-            <div class="plan-sessions" id="plan-sessions"></div>
-          </div>
         </section>
 
         <!-- AI coach -->
@@ -429,14 +394,16 @@
       <p>App personnelle de Nathan Martel — données via Garmin Connect, stockées uniquement dans ce navigateur.</p>
     </footer>
 
-    <script src="js/config.js?v=4"></script>
-    <script src="js/api.js?v=4"></script>
-    <script src="js/import.js?v=4"></script>
-    <script src="js/analysis.js?v=4"></script>
-    <script src="js/demo.js?v=4"></script>
-    <script src="js/ai-key.js?v=4"></script>
-    <script src="js/ai.js?v=4"></script>
-    <script src="js/app.js?v=4"></script>
-    <script src="js/pwa.js?v=4"></script>
+    <script src="js/config.js?v=5"></script>
+    <script src="js/api.js?v=5"></script>
+    <script src="js/import.js?v=5"></script>
+    <script src="js/weather.js?v=5"></script>
+    <script src="js/analysis.js?v=5"></script>
+    <script src="js/demo.js?v=5"></script>
+    <script src="js/ai-key.js?v=5"></script>
+    <script src="js/ai-unlock.js?v=5"></script>
+    <script src="js/ai.js?v=5"></script>
+    <script src="js/app.js?v=5"></script>
+    <script src="js/pwa.js?v=5"></script>
   </body>
 </html>

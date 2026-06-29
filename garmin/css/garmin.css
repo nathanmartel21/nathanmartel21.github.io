@@ -158,6 +158,8 @@ img { max-width: 100%; display: block; }
 }
 .field input:focus { border-color: var(--accent); }
 .field .field-hint { font-size: 0.78rem; color: var(--text-faint); margin: 0.4rem 0 0; font-family: var(--font-body); }
+.field-opt { font-family: var(--font-body); font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-faint); font-size: 0.78rem; }
+.transition-msg { font-size: 0.85rem; color: var(--text-muted); margin: 0.9rem 0 0; text-align: center; }
 
 .privacy-note { font-size: 0.8rem; color: var(--text-faint); margin: 1rem 0 0; line-height: 1.5; }
 .privacy-note strong { color: var(--text-muted); }
@@ -225,34 +227,36 @@ img { max-width: 100%; display: block; }
 .dash-section-title { font-family: var(--font-display); font-size: 1.15rem; margin: 0 0 1rem; display: flex; align-items: center; gap: 0.6rem; }
 .dash-section-title .hint { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 400; color: var(--text-faint); }
 
-/* Recommendation hero (AI reco of the day) */
-.reco-card {
+/* Daily session card (recovery verdict + concrete workout + weather one-liner) */
+.daily-card {
   border-radius: var(--radius-lg); padding: 1.9rem 2rem; display: grid;
   grid-template-columns: auto minmax(0, 1fr); gap: 1.8rem; align-items: center;
   border: 1px solid var(--border-strong); background: var(--bg-card); border-left-width: 4px;
 }
-.reco-card[data-level="go"] { border-left-color: var(--green); background: linear-gradient(135deg, rgba(52, 211, 153, 0.12) 0%, var(--bg-card) 60%); }
-.reco-card[data-level="steady"] { border-left-color: var(--accent); background: linear-gradient(135deg, rgba(0, 168, 232, 0.12) 0%, var(--bg-card) 60%); }
-.reco-card[data-level="easy"] { border-left-color: var(--yellow); background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, var(--bg-card) 60%); }
+.daily-card[data-level="go"] { border-left-color: var(--green); background: linear-gradient(135deg, rgba(52, 211, 153, 0.12) 0%, var(--bg-card) 60%); }
+.daily-card[data-level="steady"] { border-left-color: var(--accent); background: linear-gradient(135deg, rgba(0, 168, 232, 0.12) 0%, var(--bg-card) 60%); }
+.daily-card[data-level="easy"] { border-left-color: var(--yellow); background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, var(--bg-card) 60%); }
 
 .reco-ring {
   width: 124px; height: 124px; border-radius: 50%; display: grid; place-items: center;
   background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), var(--bg-raised) 0);
   position: relative;
 }
-.reco-card[data-level="go"] .reco-ring { background: conic-gradient(var(--green) calc(var(--p, 0) * 1%), var(--bg-raised) 0); }
-.reco-card[data-level="easy"] .reco-ring { background: conic-gradient(var(--yellow) calc(var(--p, 0) * 1%), var(--bg-raised) 0); }
+.daily-card[data-level="go"] .reco-ring { background: conic-gradient(var(--green) calc(var(--p, 0) * 1%), var(--bg-raised) 0); }
+.daily-card[data-level="easy"] .reco-ring { background: conic-gradient(var(--yellow) calc(var(--p, 0) * 1%), var(--bg-raised) 0); }
 .reco-ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--bg-card); }
 .reco-ring-inner { position: relative; text-align: center; }
 .reco-ring-score { font-family: var(--font-display); font-size: 2.1rem; font-weight: 700; line-height: 1; }
 .reco-ring-label { font-family: var(--font-mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); }
 
-.reco-label { font-family: var(--font-mono); font-size: 0.74rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5rem; }
-.reco-card[data-level="go"] .reco-label { color: var(--green); }
-.reco-card[data-level="easy"] .reco-label { color: var(--yellow); }
-.reco-title { font-family: var(--font-display); font-size: 1.6rem; margin: 0 0 0.5rem; }
-.reco-desc { color: var(--text-muted); margin: 0 0 0.9rem; max-width: 640px; }
-.reco-factors { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.reco-label { font-family: var(--font-mono); font-size: 0.74rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5rem; display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.daily-card[data-level="go"] .reco-label { color: var(--green); }
+.daily-card[data-level="easy"] .reco-label { color: var(--yellow); }
+.daily-type { font-family: var(--font-display); font-size: 1rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--text); padding: 0.1rem 0.6rem; border-radius: 999px; background: var(--bg-raised); border: 1px solid var(--border-strong); }
+.daily-reco { font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-muted); margin: 0.9rem 0 0; }
+.daily-weather { font-size: 0.9rem; color: var(--text); margin: 0.5rem 0 0; font-weight: 600; }
+.daily-weather[data-verdict="heat"] { color: var(--red); }
+.daily-weather[data-verdict="rain"] { color: var(--accent-bright); }
 
 .pill { font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.35rem 0.85rem; }
 .pill .pill-label { color: var(--text-faint); margin-right: 0.4rem; }
@@ -273,51 +277,32 @@ img { max-width: 100%; display: block; }
 .metric-value .metric-status { font-size: 1.1rem; }
 .metric-sub { font-size: 0.8rem; color: var(--text-muted); margin: 0.35rem 0 0; }
 
-/* Suggestion card (run of the day) */
-.suggestion-card { background: linear-gradient(135deg, rgba(0, 168, 232, 0.14) 0%, var(--bg-card) 60%); border: 1px solid rgba(0, 168, 232, 0.4); border-radius: var(--radius-lg); padding: 1.9rem 2rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: center; }
-.suggestion-label { font-family: var(--font-mono); font-size: 0.74rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.5rem; }
+/* Workout text (used inside the daily-session card) */
 .suggestion-title { font-family: var(--font-display); font-size: 1.6rem; margin: 0 0 0.5rem; }
 .suggestion-desc { color: var(--text-muted); margin: 0 0 0.9rem; max-width: 640px; }
 .suggestion-meta { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-.suggestion-type { font-family: var(--font-display); font-size: 2.4rem; font-weight: 700; color: var(--accent); text-align: center; line-height: 1.1; min-width: 130px; }
-.suggestion-type small { display: block; font-family: var(--font-mono); font-size: 0.7rem; font-weight: 400; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.3rem; }
 
-/* Training program */
-.plan-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.6rem 1.7rem; }
-.plan-controls { display: flex; flex-wrap: wrap; gap: 1.5rem 2rem; align-items: flex-end; padding-bottom: 1.4rem; margin-bottom: 1.4rem; border-bottom: 1px solid var(--border); }
-.plan-field { display: flex; flex-direction: column; gap: 0.5rem; }
-.plan-field > label { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
-.plan-field select { appearance: none; -webkit-appearance: none; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 10px; color: var(--text); font-family: var(--font-body); font-weight: 600; font-size: 0.92rem; padding: 0.6rem 2rem 0.6rem 0.9rem; cursor: pointer; outline: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239aa7b7' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.7rem center; }
-.plan-field select:focus { border-color: var(--accent); }
-.plan-field select option { background: var(--bg-raised); }
-.stepper { display: inline-flex; align-items: center; gap: 0.3rem; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0.25rem; }
-.stepper button { width: 34px; height: 34px; border-radius: 8px; border: none; background: var(--bg-card); color: var(--text); font-size: 1.15rem; font-weight: 700; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
-.stepper button:hover { background: var(--accent); color: #00121c; }
-.stepper span { min-width: 2ch; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; }
-.plan-field input[type="text"], .plan-field input[type="number"] { background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0.6rem 0.9rem; color: var(--text); font-family: var(--font-mono); font-size: 0.92rem; outline: none; width: 130px; }
-.plan-field input:focus { border-color: var(--accent); }
-.weeks-input { display: inline-flex; align-items: center; gap: 0.5rem; }
-.weeks-input input { width: 70px; text-align: right; }
-.weeks-input span { color: var(--text-muted); font-size: 0.9rem; }
-.plan-race-summary { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; margin-bottom: 1.2rem; }
-.plan-pace-box { display: flex; flex-direction: column; justify-content: center; background: var(--accent-soft); border: 1px solid rgba(0, 168, 232, 0.4); border-radius: 12px; padding: 0.8rem 1.3rem; min-width: 130px; }
-.plan-pace-label { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
-.plan-pace-value { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; color: var(--accent-bright); }
-.plan-feasibility { flex: 1; min-width: 220px; display: flex; flex-direction: column; justify-content: center; border-radius: 12px; padding: 0.8rem 1.2rem; border: 1px solid var(--border-strong); border-left-width: 4px; }
-.plan-feasibility[data-tone="good"] { border-left-color: var(--green); }
-.plan-feasibility[data-tone="warn"] { border-left-color: var(--accent); }
-.plan-feasibility[data-tone="bad"] { border-left-color: var(--red); }
-.plan-feas-label { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
-.plan-feas-detail { color: var(--text-muted); font-size: 0.86rem; margin-top: 0.2rem; }
-.plan-volume-note { color: var(--text-muted); font-size: 0.95rem; margin: 0 0 1.1rem; }
-.plan-volume-note strong { font-family: var(--font-display); font-size: 1.25rem; color: var(--accent); }
-.plan-sessions { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.9rem; }
-.plan-session { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
-.plan-session-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
-.plan-session-num { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; color: var(--text-faint); }
-.plan-session-dist { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; margin: 0; }
-.plan-session-pace { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-bright); margin: 0.15rem 0 0.5rem; }
-.plan-session-focus { font-size: 0.82rem; color: var(--text-muted); margin: 0; line-height: 1.5; }
+/* Weather & run windows card */
+.weather-card { background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 1.5rem 1.7rem; border-left: 4px solid var(--accent); }
+.weather-card[data-state="ideal"] { border-left-color: var(--green); }
+.weather-card[data-state="heat"] { border-left-color: var(--red); }
+.weather-card[data-state="rain"], .weather-card[data-state="mixed"] { border-left-color: var(--accent-bright); }
+.weather-empty-text { color: var(--text-muted); margin: 0 0 0.9rem; }
+.weather-city-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.weather-city-row input { flex: 1; min-width: 160px; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0.6rem 0.9rem; color: var(--text); font-family: var(--font-body); font-size: 0.95rem; outline: none; }
+.weather-city-row input:focus { border-color: var(--accent); }
+.weather-msg { font-size: 0.85rem; color: var(--text-muted); margin: 0.6rem 0 0; }
+.weather-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.weather-main { display: flex; align-items: baseline; gap: 0.9rem; }
+.weather-temp { font-family: var(--font-display); font-size: 2.6rem; font-weight: 700; line-height: 1; }
+.weather-temp small { font-size: 1.1rem; color: var(--text-muted); }
+.weather-range { font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-faint); }
+.weather-advice { color: var(--text); margin: 1rem 0 0.9rem; line-height: 1.55; }
+.weather-windows { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.weather-window { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; border-radius: 999px; padding: 0.35rem 0.85rem; background: var(--bg-raised); border: 1px solid var(--border-strong); }
+.weather-window.good { color: var(--green); border-color: rgba(52, 211, 153, 0.4); }
+.weather-window.rain { color: var(--accent-bright); border-color: rgba(0, 168, 232, 0.4); }
+.weather-window.hot { color: var(--red); border-color: rgba(248, 113, 113, 0.4); }
 
 /* Fitness condition */
 .condition-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.8rem; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--text-faint); border-radius: var(--radius-lg); padding: 1.6rem 1.8rem; }
@@ -422,8 +407,7 @@ img { max-width: 100%; display: block; }
 /* Responsive */
 @media (max-width: 900px) {
   .charts-grid { grid-template-columns: 1fr; }
-  .suggestion-card, .reco-card { grid-template-columns: 1fr; }
-  .suggestion-type { text-align: left; }
+  .daily-card { grid-template-columns: 1fr; }
   .reco-ring { margin: 0 auto; }
 }
 
@@ -549,6 +533,12 @@ img { max-width: 100%; display: block; }
 .ai-briefing-output code { font-family: var(--font-mono); background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 5px; font-size: 0.85em; color: var(--accent-bright); }
 .ai-briefing-output .md-row { display: flex; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
 .ai-briefing-output .md-row span { flex: 1; }
+
+/* Form field (shared by the AI coach's plan form) */
+.plan-field { display: flex; flex-direction: column; gap: 0.5rem; }
+.plan-field > label { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.plan-field select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239aa7b7' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.7rem center; cursor: pointer; }
+.plan-field select option { background: var(--bg-raised); }
 
 .ai-plan-form { background: var(--bg-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.5rem; }
 .ai-plan-title { font-family: var(--font-display); font-weight: 600; margin: 0 0 1rem; }

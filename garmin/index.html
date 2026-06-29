@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/garmin.css?v=4" />
+    <link rel="stylesheet" href="css/garmin.css?v=5" />
     <!-- PWA -->
     <meta name="theme-color" content="#0a0e14" />
     <link rel="manifest" href="manifest.webmanifest" />
@@ -111,6 +111,30 @@
           </div>
         </div>
 
+        <!-- State 2b: post-login transition — city (weather) + AI passphrase -->
+        <div id="transition-view" hidden>
+          <h2>Presque prêt 👋</h2>
+          <p>Deux réglages optionnels pour personnaliser ton dashboard — modifiables à tout moment.</p>
+
+          <div class="field">
+            <label for="transition-city">TA VILLE <span class="field-opt">— météo &amp; créneaux de course</span></label>
+            <input id="transition-city" type="text" placeholder="ex. Paris" autocomplete="off" />
+            <p class="field-hint">Sert à récupérer la température et la pluie du jour pour te suggérer les meilleurs créneaux. Stockée dans ce navigateur.</p>
+          </div>
+
+          <div class="field" id="transition-ai-field">
+            <label for="transition-ai-pass">MOT DE PASSE IA <span class="field-opt">— débloque le coach IA</span></label>
+            <input id="transition-ai-pass" type="password" placeholder="ta passphrase" autocomplete="off" />
+            <p class="field-hint">Déchiffre la clé du coach IA. Laisse vide pour le débloquer plus tard depuis le dashboard.</p>
+          </div>
+
+          <div class="auth-actions">
+            <button class="btn btn-accent btn-big" id="transition-continue-btn">Continuer vers le dashboard</button>
+            <button class="btn btn-ghost btn-sm" id="transition-skip-btn">Passer</button>
+          </div>
+          <p class="transition-msg" id="transition-msg"></p>
+        </div>
+
         <!-- State 3: one or more athletes connected -->
         <div id="connected-view" hidden>
           <h2>Athlètes connectés</h2>
@@ -161,16 +185,20 @@
       <p>App personnelle de Nathan Martel — données via Garmin Connect, traitées dans ce navigateur. Non affiliée à Garmin Ltd.</p>
     </footer>
 
-    <script src="js/config.js?v=4"></script>
-    <script src="js/api.js?v=4"></script>
-    <script src="js/import.js?v=4"></script>
-    <script src="js/pwa.js?v=4"></script>
+    <script src="js/config.js?v=5"></script>
+    <script src="js/api.js?v=5"></script>
+    <script src="js/import.js?v=5"></script>
+    <script src="js/weather.js?v=5"></script>
+    <script src="js/ai-key.js?v=5"></script>
+    <script src="js/ai-unlock.js?v=5"></script>
+    <script src="js/pwa.js?v=5"></script>
     <script>
-      const views = ['setup-view', 'connect-view', 'connected-view', 'import-view'];
+      const views = ['setup-view', 'connect-view', 'transition-view', 'connected-view', 'import-view'];
       let addingAthlete = false;
       let mfaTicket = null;
       let stagedData = null;
       let importTargetId = null;
+      let transitionProfileId = null;
 
       function showView(id) { views.forEach(v => { document.getElementById(v).hidden = v !== id; }); }
       function showStatus(kind, text) {
@@ -236,7 +264,36 @@
 
       function finishLogin(res) {
         const id = createLiveProfile(res.token, res.name || 'Athlète');
-        showStatus('success', 'Connecté ! Récupération de tes données…');
+        clearStatus();
+        setLoginBusy(false);
+        showTransition(id);
+      }
+
+      /* ---- Post-login transition: city (weather) + AI passphrase ---- */
+
+      function showTransition(id) {
+        transitionProfileId = id;
+        const cityInput = document.getElementById('transition-city');
+        cityInput.value = (window.Weather && Weather.getCity(id)) || '';
+        document.getElementById('transition-ai-field').hidden = !(window.AiUnlock && AiUnlock.hasEncryptedKey());
+        document.getElementById('transition-ai-pass').value = '';
+        document.getElementById('transition-msg').textContent = '';
+        showView('transition-view');
+        setTimeout(() => cityInput.focus(), 0);
+      }
+
+      async function finishTransition() {
+        const city = document.getElementById('transition-city').value.trim();
+        const pass = document.getElementById('transition-ai-pass').value;
+        const msg = document.getElementById('transition-msg');
+        const btn = document.getElementById('transition-continue-btn');
+        if (city && window.Weather) Weather.setCity(city, transitionProfileId);
+        if (pass && window.AiUnlock && AiUnlock.hasEncryptedKey()) {
+          btn.disabled = true;
+          msg.textContent = 'Déchiffrement de la clé IA…';
+          try { await AiUnlock.unlock(pass); }
+          catch { btn.disabled = false; msg.textContent = '❌ Mot de passe IA incorrect — corrige-le ou clique « Passer ».'; return; }
+        }
         window.location.href = 'app.html';
       }
 
@@ -380,6 +437,11 @@
 
       document.getElementById('connect-btn').addEventListener('click', doLogin);
       document.getElementById('mfa-btn').addEventListener('click', doMfa);
+
+      document.getElementById('transition-continue-btn').addEventListener('click', finishTransition);
+      document.getElementById('transition-skip-btn').addEventListener('click', () => { window.location.href = 'app.html'; });
+      document.getElementById('transition-ai-pass').addEventListener('keydown', e => { if (e.key === 'Enter') finishTransition(); });
+      document.getElementById('transition-city').addEventListener('keydown', e => { if (e.key === 'Enter') finishTransition(); });
       document.getElementById('garmin-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
       document.getElementById('mfa-code').addEventListener('keydown', e => { if (e.key === 'Enter') doMfa(); });
 

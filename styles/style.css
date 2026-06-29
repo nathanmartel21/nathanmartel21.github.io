@@ -21,7 +21,6 @@
   --accent: #34d399;
   --accent-dim: rgba(52, 211, 153, 0.12);
   --accent-2: #60a5fa;
-  --strava: #fc4c02;
   --garmin: #00a8e8;
 
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
@@ -143,17 +142,6 @@ a {
 .site-nav a.active {
   color: var(--accent);
   background: var(--accent-dim);
-}
-
-.site-nav a.nav-strava {
-  color: var(--strava);
-  border: 1px solid rgba(252, 76, 2, 0.35);
-  margin-left: 0.35rem;
-}
-
-.site-nav a.nav-strava:hover {
-  background: rgba(252, 76, 2, 0.12);
-  color: #ff7a3d;
 }
 
 .site-nav a.nav-garmin {
@@ -296,15 +284,6 @@ a {
 .btn-secondary:hover {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.btn-strava {
-  background: var(--strava);
-  color: #ffffff;
-}
-
-.btn-strava:hover {
-  background: #ff5e1a;
 }
 
 .btn-garmin {
@@ -589,12 +568,12 @@ a {
 }
 
 /* ------------------------------------------------------------------
-   Strava teaser
+   App teaser
    ------------------------------------------------------------------ */
 
 .app-tiles {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(0, 320px));
   gap: 1.25rem;
   margin-top: 1.5rem;
 }
@@ -628,10 +607,6 @@ a {
   font-weight: 700;
   font-size: 1.6rem;
 }
-
-.app-tile-strava .app-tile-icon { background: rgba(252, 76, 2, 0.14); }
-.app-tile-strava:hover { border-color: var(--strava); background: linear-gradient(135deg, rgba(252, 76, 2, 0.10) 0%, var(--bg-card) 60%); }
-.app-tile-strava .app-tile-name { color: var(--strava); }
 
 .app-tile-garmin .app-tile-icon { background: rgba(0, 168, 232, 0.14); }
 .app-tile-garmin:hover { border-color: var(--garmin); background: linear-gradient(135deg, rgba(0, 168, 232, 0.10) 0%, var(--bg-card) 60%); }
