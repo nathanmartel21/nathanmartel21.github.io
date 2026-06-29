@@ -277,6 +277,70 @@ function weeklyEffort(runs, nWeeks = 26, ref = new Date()) {
   return weeks;
 }
 
+/* Correlates running pace (s/km) with the day's mean temperature. `tempByDate`
+   is a Map<YYYY-MM-DD, °C>. Returns scatter points + a plain-language takeaway
+   built from a simple linear regression (pace ~ temp). */
+function tempPaceAnalysis(runs, tempByDate) {
+  if (!tempByDate) return null;
+  const pts = [];
+  runs.forEach(r => {
+    const t = tempByDate.get(r.date.slice(0, 10));
+    if (t == null) return;
+    const pace = paceOf(r);                       // s/km
+    if (!pace || !Number.isFinite(pace)) return;
+    pts.push({ temp: t, pace, km: r.distance / 1000, date: r.date });
+  });
+  if (pts.length < 6) return { points: pts, n: pts.length, takeaway: null };
+
+  const xs = pts.map(p => p.temp), ys = pts.map(p => p.pace);
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { const dx = xs[i] - mx; num += dx * (ys[i] - my); den += dx * dx; }
+  const slope = den ? num / den : 0;              // s/km per °C
+  const r = pearson(xs, ys);
+
+  let takeaway = null;
+  if (slope > 0.4 && r != null && r >= 0.25) {
+    const delta = Math.round(slope * 13);         // 15°C → 28°C
+    takeaway = `Au-dessus de ~25 °C tu cours environ ${delta} s/km plus lentement qu’à 15 °C. Pense à viser les créneaux frais et à t’hydrater.`;
+  } else if (slope < -0.4 && r != null && r <= -0.25) {
+    takeaway = 'Tu sembles plutôt plus rapide quand il fait chaud — sans doute parce que tes séances intenses tombent les beaux jours.';
+  } else {
+    takeaway = 'Pas d’effet net de la température sur ton allure pour l’instant — continue d’accumuler des sorties.';
+  }
+  return { points: pts, n, slope, r, takeaway };
+}
+
+/* Aerobic vs anaerobic Training Effect, summed per week (Garmin "load focus").
+   Returns weekly buckets plus a focus verdict over the window. */
+function trainingEffectBalance(runs, days = 92, ref = new Date()) {
+  const pool = withinDays(runs, days, ref).filter(r => r.te_aerobic != null || r.te_anaerobic != null);
+  const nWeeks = Math.max(1, Math.ceil(days / 7));
+  const currentWeekStart = startOfWeek(ref);
+  const weeks = [];
+  for (let i = nWeeks - 1; i >= 0; i--) {
+    const start = addDays(currentWeekStart, -7 * i);
+    const end = addDays(start, 7);
+    const inWeek = pool.filter(r => { const d = new Date(r.date); return d >= start && d < end; });
+    weeks.push({
+      label: start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+      aerobic: inWeek.reduce((s, r) => s + (r.te_aerobic || 0), 0),
+      anaerobic: inWeek.reduce((s, r) => s + (r.te_anaerobic || 0), 0)
+    });
+  }
+  const aero = weeks.reduce((s, w) => s + w.aerobic, 0);
+  const anaero = weeks.reduce((s, w) => s + w.anaerobic, 0);
+  const total = aero + anaero;
+  const anaeroPct = total > 0 ? (anaero / total) * 100 : 0;
+  let focus;
+  if (!total) focus = { key: 'none', label: 'Données de Training Effect indisponibles', advice: '' };
+  else if (anaeroPct < 8) focus = { key: 'base', label: 'Très orienté endurance', advice: 'Base aérobie solide. Une touche d’intensité (seuil, VMA) débloquerait de la vitesse.' };
+  else if (anaeroPct < 22) focus = { key: 'balanced', label: 'Équilibré', advice: 'Bon mélange endurance / intensité — c’est le profil qui fait progresser sans se cramer.' };
+  else focus = { key: 'intense', label: 'Très orienté intensité', advice: 'Beaucoup d’anaérobie : veille à assez de volume facile pour récupérer et éviter le plateau.' };
+  return { weeks, aero, anaero, anaeroPct, hasData: total > 0, focus };
+}
+
 function weekdayDistribution(runs, days = 365, ref = new Date()) {
   const labels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
   const out = labels.map(label => ({ label, km: 0, count: 0 }));
@@ -336,6 +400,79 @@ function fmtClock(seconds) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+/* Standard race distances used by the predictor + best-efforts boards. */
+const STD_RACES = [
+  { km: 5, label: '5 km' },
+  { km: 10, label: '10 km' },
+  { km: 21.0975, label: 'Semi' },
+  { km: 42.195, label: 'Marathon' }
+];
+
+/* Current race projections (Riegel) from the last 120 days of running — "what
+   you could run today". */
+function racePredictions(runs, ref = new Date()) {
+  return STD_RACES.map(r => {
+    const sec = predictRaceTime(runs, r.km, ref);
+    return { km: r.km, label: r.label, seconds: sec, time: sec ? fmtClock(sec) : null, pace: sec ? sec / r.km : null };
+  });
+}
+
+/* Best estimated efforts over ALL history (the peak you've ever projected), with
+   the source run. A run must be at least 60% of the target distance to give a
+   credible Riegel estimate. */
+function bestEfforts(runs) {
+  const dists = [{ km: 1, label: '1 km' }, { km: 5, label: '5 km' }, { km: 10, label: '10 km' }, { km: 21.0975, label: 'Semi' }];
+  return dists.map(d => {
+    let best = null;
+    runs.forEach(r => {
+      const runKm = r.distance / 1000;
+      if (runKm < d.km * 0.6 || r.moving_time <= 0) return;
+      const predicted = r.moving_time * Math.pow(d.km / runKm, 1.06);
+      if (!best || predicted < best.seconds) best = { seconds: predicted, run: r };
+    });
+    return {
+      km: d.km, label: d.label,
+      seconds: best ? best.seconds : null,
+      time: best ? fmtClock(best.seconds) : null,
+      pace: best ? best.seconds / d.km : null,
+      date: best ? best.run.date : null,
+      sourceKm: best ? best.run.distance / 1000 : null
+    };
+  });
+}
+
+/* Goal-race readout: days left, current projection for the target distance, gap
+   to the (optional) target time, and a coarse taper phase. */
+function raceGoalStatus(runs, goal, ref = new Date()) {
+  if (!goal || !goal.km || !goal.date) return null;
+  const raceDay = startOfDay(new Date(goal.date));
+  const today = startOfDay(ref);
+  const days = Math.round((raceDay - today) / 86400000);
+  const predicted = predictRaceTime(runs, goal.km, ref);
+  const target = goal.targetSeconds || 0;
+
+  let phase = null;
+  if (days < 0) phase = { key: 'done', label: 'Course passée' };
+  else if (days === 0) phase = { key: 'race', label: 'C’est aujourd’hui ! 🏁' };
+  else if (days <= 3) phase = { key: 'peak', label: 'Derniers jours — repos & glucides' };
+  else if (days <= 14) phase = { key: 'taper', label: 'Affûtage : réduis le volume, garde un peu d’intensité' };
+  else if (days <= 56) phase = { key: 'build', label: 'Bloc spécifique : construis l’allure course' };
+  else phase = { key: 'base', label: 'Base : volume & endurance avant le bloc spécifique' };
+
+  let onTrack = null;
+  if (target && predicted) {
+    const ratio = target / predicted;   // >1 means target is slower (easier) than projection
+    if (ratio >= 1.0) onTrack = { tone: 'good', label: 'Dans tes cordes', detail: `Projection actuelle ~${fmtClock(predicted)}.` };
+    else if (ratio >= 0.96) onTrack = { tone: 'warn', label: 'Ambitieux mais jouable', detail: `Projection ~${fmtClock(predicted)} — il reste du travail.` };
+    else onTrack = { tone: 'bad', label: 'Très ambitieux', detail: `Projection ~${fmtClock(predicted)}, loin de l’objectif.` };
+  }
+
+  return {
+    days, phase, predicted, predictedStr: predicted ? fmtClock(predicted) : null,
+    target, targetStr: target ? fmtClock(target) : null, onTrack
+  };
 }
 
 function suggestRun(runs, ref = new Date()) {

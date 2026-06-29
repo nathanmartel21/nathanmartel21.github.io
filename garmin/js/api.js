@@ -93,6 +93,21 @@ function getLastSync(id = getActiveId()) {
   return v > 0 ? new Date(v * 1000) : null;
 }
 
+/* ---------------- Per-activity detail (lazy, cached) ---------------- */
+
+/* Fetches splits / HR zones / GPS track for one activity from the relay.
+   Live profiles only (needs a session token). Cached forever per profile +
+   activity, since a past activity's detail never changes. */
+async function getActivityDetail(activityId, id = getActiveId()) {
+  const ck = `garmin_prof_${id}_actdetail_${activityId}`;
+  try { const cached = localStorage.getItem(ck); if (cached) return JSON.parse(cached); } catch {}
+  const token = Profile.get(PKEY.token, id);
+  if (!token) throw new Error("Détail disponible uniquement pour un compte Garmin connecté.");
+  const data = await apiPost('/api/activity', { token, activity_id: Number(activityId) });
+  try { localStorage.setItem(ck, JSON.stringify(data)); } catch {}
+  return data;
+}
+
 /* Removes the active profile and routes to the next sensible screen. */
 function logoutActive() {
   const id = getActiveId();

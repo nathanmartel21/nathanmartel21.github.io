@@ -295,6 +295,120 @@ def pull_snapshot(api: Any) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Per-activity detail (lazy-loaded on click): km splits, HR zones, GPS track  #
+# --------------------------------------------------------------------------- #
+
+def _metric_index(descriptors: Any, key: str) -> Optional[int]:
+    """Index of a metric inside each activityDetailMetrics row, by its key."""
+    for d in descriptors or []:
+        if isinstance(d, dict) and d.get("key") == key:
+            return d.get("metricsIndex")
+    return None
+
+
+def _km_splits(stream: list[tuple]) -> list[dict]:
+    """Build per-kilometre splits from a (distance_m, elapsed_s, hr) stream.
+
+    HR per km is the mean of the samples falling in that km (approximate, since
+    samples aren't evenly spaced in time, but fine for display)."""
+    splits: list[dict] = []
+    if len(stream) < 2:
+        return splits
+
+    next_km = 1000.0
+    seg_start_dur = stream[0][1]
+    hr_vals: list[float] = []
+
+    for dist, dur, hr in stream:
+        if hr is not None:
+            hr_vals.append(hr)
+        while dist >= next_km:
+            seg_time = dur - seg_start_dur
+            splits.append({
+                "km": int(next_km / 1000),
+                "time": int(round(seg_time)),
+                "pace": int(round(seg_time)),          # seconds for this 1 km
+                "avg_hr": int(round(sum(hr_vals) / len(hr_vals))) if hr_vals else None,
+            })
+            seg_start_dur = dur
+            hr_vals = []
+            next_km += 1000.0
+
+    # Trailing partial kilometre (≥ 100 m left).
+    last_dist, last_dur, _ = stream[-1]
+    rem = last_dist - (next_km - 1000.0)
+    if rem >= 100:
+        seg_time = last_dur - seg_start_dur
+        pace = seg_time / (rem / 1000.0) if rem else 0
+        splits.append({
+            "km": round(last_dist / 1000.0, 2),
+            "time": int(round(seg_time)),
+            "pace": int(round(pace)),
+            "avg_hr": int(round(sum(hr_vals) / len(hr_vals))) if hr_vals else None,
+            "partial": True,
+        })
+    return splits
+
+
+def _hr_zones(api: Any, activity_id: Any) -> list[dict]:
+    """Seconds spent in each HR zone (Z1–Z5)."""
+    data = _safe(lambda: api.get_activity_hr_in_timezones(activity_id)) or []
+    zones: list[dict] = []
+    for z in data if isinstance(data, list) else []:
+        secs = _num(z.get("secsInZone"))
+        if secs is None:
+            continue
+        zones.append({
+            "zone": _int(z.get("zoneNumber")),
+            "secs": int(round(secs)),
+            "low_bpm": _int(z.get("zoneLowBoundary")),
+        })
+    zones.sort(key=lambda x: x["zone"] or 0)
+    return zones
+
+
+def pull_activity_detail(api: Any, activity_id: Any,
+                         max_chart: int = 2000, max_poly: int = 1500) -> dict:
+    """Lazy per-activity detail for the dashboard's activity modal:
+    per-km splits, time in HR zones, and a simplified GPS track."""
+    detail = _safe(lambda: api.get_activity_details(activity_id,
+                                                    maxchart=max_chart,
+                                                    maxpoly=max_poly)) or {}
+    descriptors = detail.get("metricDescriptors") or []
+    rows = detail.get("activityDetailMetrics") or []
+
+    i_dist = _metric_index(descriptors, "sumDistance")
+    i_dur = _metric_index(descriptors, "sumDuration")
+    if i_dur is None:
+        i_dur = _metric_index(descriptors, "sumMovingDuration")
+    i_hr = _metric_index(descriptors, "directHeartRate")
+
+    stream: list[tuple] = []
+    for row in rows:
+        vals = row.get("metrics") if isinstance(row, dict) else row
+        if not vals:
+            continue
+        dist = vals[i_dist] if (i_dist is not None and i_dist < len(vals)) else None
+        dur = vals[i_dur] if (i_dur is not None and i_dur < len(vals)) else None
+        if dist is None or dur is None:
+            continue
+        hr = vals[i_hr] if (i_hr is not None and i_hr < len(vals)) else None
+        stream.append((dist, dur, hr))
+
+    poly = _dig(detail, "geoPolylineDTO", "polyline") or []
+    track = [[round(p["lat"], 5), round(p["lon"], 5)]
+             for p in poly
+             if isinstance(p, dict) and p.get("lat") is not None and p.get("lon") is not None]
+
+    return {
+        "id": activity_id,
+        "splits": _km_splits(stream),
+        "hr_zones": _hr_zones(api, activity_id),
+        "track": track,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Top-level                                                                   #
 # --------------------------------------------------------------------------- #
 

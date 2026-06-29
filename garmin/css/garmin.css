@@ -76,6 +76,15 @@ img { max-width: 100%; display: block; }
   border: 1px solid rgba(43, 196, 255, 0.4); padding: 0.15rem 0.45rem; border-radius: 6px;
 }
 
+/* Dashboard page navigation (today / graphs / coach / perf) */
+.dash-nav { display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
+.dash-nav a {
+  font-family: var(--font-mono); font-size: 0.82rem; font-weight: 600; color: var(--text-muted);
+  padding: 0.4rem 0.85rem; border-radius: 999px; border: 1px solid transparent; transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.dash-nav a:hover { color: var(--text); background: var(--bg-raised); }
+.dash-nav a.active { color: var(--accent-bright); background: rgba(0, 168, 232, 0.12); border-color: rgba(0, 168, 232, 0.35); }
+
 .topbar-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 
 .demo-badge {
@@ -303,6 +312,74 @@ img { max-width: 100%; display: block; }
 .weather-window.good { color: var(--green); border-color: rgba(52, 211, 153, 0.4); }
 .weather-window.rain { color: var(--accent-bright); border-color: rgba(0, 168, 232, 0.4); }
 .weather-window.hot { color: var(--red); border-color: rgba(248, 113, 113, 0.4); }
+
+/* Race goal, projections & best efforts */
+.race-goal-card { background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 1.4rem 1.6rem; margin-bottom: 1.25rem; }
+.race-goal-set { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: flex-end; }
+.race-goal-set input[type="text"], .race-goal-set input[type="number"], .race-goal-set input[type="date"] { background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 10px; padding: 0.55rem 0.8rem; color: var(--text); font-family: var(--font-mono); font-size: 0.9rem; outline: none; }
+.race-goal-set input:focus { border-color: var(--accent); }
+.race-goal-main { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; }
+.race-goal-countdown { font-family: var(--font-display); font-size: 2.2rem; font-weight: 700; color: var(--accent-bright); line-height: 1; min-width: 4ch; }
+.race-goal-countdown[data-phase="race"], .race-goal-countdown[data-phase="peak"] { color: var(--green); }
+.race-goal-countdown[data-phase="done"] { color: var(--text-faint); }
+.race-goal-name { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; margin: 0; }
+.race-goal-phase { color: var(--text-muted); font-size: 0.88rem; margin: 0.2rem 0 0; }
+.race-goal-main > button { margin-left: auto; }
+.race-goal-readout .suggestion-meta { margin-top: 1rem; }
+.race-goal-detail { color: var(--text-muted); font-size: 0.86rem; margin: 0.6rem 0 0; }
+.pill.race-ot[data-tone="good"] { color: var(--green); border-color: rgba(52, 211, 153, 0.4); }
+.pill.race-ot[data-tone="warn"] { color: var(--yellow); border-color: rgba(251, 191, 36, 0.4); }
+.pill.race-ot[data-tone="bad"] { color: var(--red); border-color: rgba(248, 113, 113, 0.4); }
+
+.race-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+.race-board-title { font-family: var(--font-display); font-size: 1rem; font-weight: 600; margin: 0 0 0.8rem; }
+.race-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.7rem; }
+.race-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem 0.8rem; text-align: center; }
+.race-card.empty { opacity: 0.55; }
+.race-card-dist { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 0; }
+.race-card-time { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; margin: 0.3rem 0 0.15rem; }
+.race-card-sub { font-size: 0.74rem; color: var(--text-muted); margin: 0; }
+
+/* Activity detail modal (live: splits, HR zones, GPS track) */
+.activities-table tr.act-row { cursor: pointer; }
+.activities-table tr.act-row:hover td { background: var(--bg-raised); }
+
+.act-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.act-modal[hidden] { display: none; }
+.act-modal-backdrop { position: absolute; inset: 0; background: rgba(5, 8, 12, 0.7); backdrop-filter: blur(3px); }
+.act-modal-panel {
+  position: relative; z-index: 1; width: min(720px, 100%); max-height: 90vh; overflow-y: auto;
+  background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  padding: 1.6rem 1.7rem; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.act-modal-close { position: absolute; top: 0.9rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
+.act-modal-close:hover { color: var(--text); }
+.act-modal-title { font-family: var(--font-display); font-size: 1.35rem; margin: 0 2rem 0.25rem 0; }
+.act-modal-sub { font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1.2rem; }
+.act-modal-loading { display: flex; align-items: center; gap: 0.6rem; color: var(--text-muted); padding: 1.5rem 0; }
+.act-modal-msg { color: var(--text-muted); padding: 1rem 0; }
+.act-detail-block { margin-top: 1.4rem; }
+.act-detail-block h4 { font-family: var(--font-display); font-size: 1rem; margin: 0 0 0.8rem; }
+
+.act-map-wrap { width: 100%; height: 240px; border-radius: var(--radius); overflow: hidden; background: var(--bg-raised); border: 1px solid var(--border); }
+.act-map-wrap canvas { width: 100%; height: 100%; display: block; }
+
+.hrzone-bar { display: flex; height: 18px; border-radius: 999px; overflow: hidden; background: var(--bg-raised); }
+.hrzone-seg { height: 100%; }
+.hrzone-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; margin-top: 0.7rem; }
+.hrzone-leg { font-family: var(--font-mono); font-size: 0.76rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.4rem; }
+.hrzone-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.splits-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.split-row { display: grid; grid-template-columns: 3ch minmax(0, 1fr) 5.5ch 4.5ch; align-items: center; gap: 0.7rem; }
+.split-row.partial { opacity: 0.7; }
+.split-km { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700; }
+.split-km small { font-weight: 400; color: var(--text-faint); font-size: 0.62rem; margin-left: 0.15rem; }
+.split-bar-wrap { background: var(--bg-raised); border-radius: 999px; height: 12px; overflow: hidden; }
+.split-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-bright)); border-radius: 999px; }
+.split-pace { font-family: var(--font-mono); font-size: 0.82rem; text-align: right; }
+.split-pace small { color: var(--text-faint); font-size: 0.62rem; }
+.split-hr { font-family: var(--font-mono); font-size: 0.76rem; color: var(--text-muted); text-align: right; }
 
 /* Fitness condition */
 .condition-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.8rem; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--text-faint); border-radius: var(--radius-lg); padding: 1.6rem 1.8rem; }
@@ -580,6 +657,8 @@ img { max-width: 100%; display: block; }
   .topbar { padding: calc(0.55rem + env(safe-area-inset-top)) 0 0.55rem; }
   .topbar-inner { flex-direction: column; align-items: center; gap: 0.5rem; }
   .app-brand { justify-content: center; font-size: 0.95rem; }
+  .dash-nav { width: 100%; justify-content: center; gap: 0.2rem; order: 3; }
+  .dash-nav a { padding: 0.35rem 0.7rem; font-size: 0.78rem; }
   .topbar-actions { width: 100%; justify-content: center; flex-wrap: wrap; gap: 0.3rem; }
   .topbar-actions .btn-sm { padding: 0.4rem 0.5rem; font-size: 0.7rem; border-radius: 7px; white-space: nowrap; }
   .topbar-actions > * { max-width: 100%; }

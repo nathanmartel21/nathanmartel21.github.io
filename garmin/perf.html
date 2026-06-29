@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Performance — Garmin Premium</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/garmin.css?v=7" />
+    <!-- PWA -->
+    <meta name="theme-color" content="#0a0e14" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Garmin Pro" />
+  </head>
+  <body data-page="perf">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a class="app-brand" href="app.html">
+          <span class="bolt">⌚</span>
+          Garmin
+          <span class="premium">Premium</span>
+        </a>
+        <nav class="dash-nav">
+          <a href="app.html" data-nav="today">Aujourd’hui</a>
+          <a href="graphs.html" data-nav="graphs">Graphiques</a>
+          <a href="coach.html" data-nav="coach">Coach IA</a>
+          <a href="perf.html" data-nav="perf">Performance</a>
+        </nav>
+        <div class="topbar-actions">
+          <span class="demo-badge" id="demo-badge" hidden>MODE DÉMO</span>
+          <span class="profile-switcher" id="profile-switcher">
+            <img id="profile-avatar" alt="" hidden />
+            <select id="profile-select" aria-label="Changer d’athlète"></select>
+          </span>
+          <a class="btn btn-ghost btn-sm" href="index.html?add=1" title="Connecter un autre compte Garmin">+ Athlète</a>
+          <button class="btn btn-ghost btn-sm" id="refresh-btn">↻ Synchroniser</button>
+          <button class="btn btn-ghost btn-sm" id="logout-btn">Déconnexion</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container dash-main">
+      <div class="loader show" id="loader">
+        <div class="spinner"></div>
+        <p id="loader-msg">Chargement…</p>
+      </div>
+
+      <div class="status-msg" id="dash-status"></div>
+
+      <div class="dash-content" id="dash-content">
+        <!-- KPIs -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Vue d’ensemble <span class="hint">course à pied uniquement</span></h2>
+          <div class="kpi-grid" id="kpi-grid"></div>
+        </section>
+
+        <!-- Race goal, projections & best efforts -->
+        <section class="dash-section" id="race-section">
+          <h2 class="dash-section-title">🏁 Course &amp; objectifs <span class="hint">projections de chrono et meilleures perfs estimées</span></h2>
+
+          <div class="race-goal-card" id="race-goal-card">
+            <div class="race-goal-set" id="race-goal-set">
+              <div class="plan-field">
+                <label for="race-goal-km">Distance</label>
+                <select id="race-goal-km">
+                  <option value="5">5 km</option>
+                  <option value="10">10 km</option>
+                  <option value="21.0975">Semi (21,1 km)</option>
+                  <option value="42.195">Marathon (42,2 km)</option>
+                  <option value="custom">Autre…</option>
+                </select>
+              </div>
+              <div class="plan-field" id="race-goal-customkm" hidden>
+                <label for="race-goal-customkm-input">km</label>
+                <input id="race-goal-customkm-input" type="number" min="1" max="200" step="0.1" placeholder="15" />
+              </div>
+              <div class="plan-field">
+                <label for="race-goal-date">Date</label>
+                <input id="race-goal-date" type="date" />
+              </div>
+              <div class="plan-field">
+                <label for="race-goal-target">Temps visé <span class="field-opt">option.</span></label>
+                <input id="race-goal-target" type="text" inputmode="numeric" placeholder="hh:mm:ss" />
+              </div>
+              <button class="btn btn-accent btn-sm" id="race-goal-save">Définir l’objectif</button>
+            </div>
+            <div class="race-goal-readout" id="race-goal-readout" hidden></div>
+          </div>
+
+          <div class="race-boards">
+            <div class="race-board">
+              <h3 class="race-board-title">Projection actuelle <span class="hint">forme des 120 derniers jours</span></h3>
+              <div class="race-cards" id="race-predict-cards"></div>
+            </div>
+            <div class="race-board">
+              <h3 class="race-board-title">Meilleures perfs estimées <span class="hint">sur tout ton historique</span></h3>
+              <div class="race-cards" id="race-best-cards"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Records -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Records personnels</h2>
+          <div class="records-grid" id="records-grid"></div>
+        </section>
+
+        <!-- Weekly goal -->
+        <section class="dash-section">
+          <div class="goal-card">
+            <div class="goal-head">
+              <h3>🎯 Objectif hebdomadaire</h3>
+              <div class="goal-edit"><input id="goal-input" type="number" min="1" max="300" step="1" /><span>km / semaine</span></div>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="goal-fill" style="width: 0%"></div></div>
+            <p class="goal-status" id="goal-status"></p>
+          </div>
+        </section>
+
+        <!-- Activities -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Dernières activités</h2>
+          <p class="lastrun-comment" id="ai-lastrun" hidden></p>
+          <div class="activities-table-wrap">
+            <table class="activities-table">
+              <thead><tr><th>Date</th><th>Activité</th><th>Type</th><th>Distance</th><th>Durée</th><th>Allure</th><th>D+</th><th>FC moy.</th><th>VO2max</th></tr></thead>
+              <tbody id="activities-body"></tbody>
+            </table>
+          </div>
+          <div style="display:flex; justify-content:center; margin-top:1.25rem;">
+            <button class="btn btn-ghost btn-sm" id="more-activities-btn" hidden>Afficher plus</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Activity detail modal (live profiles): splits, HR zones, GPS track -->
+    <div class="act-modal" id="act-modal" hidden>
+      <div class="act-modal-backdrop" id="act-modal-backdrop"></div>
+      <div class="act-modal-panel" role="dialog" aria-modal="true" aria-labelledby="act-modal-title">
+        <button class="act-modal-close" id="act-modal-close" aria-label="Fermer">✕</button>
+        <h3 class="act-modal-title" id="act-modal-title">…</h3>
+        <p class="act-modal-sub" id="act-modal-sub"></p>
+        <div class="act-modal-loading" id="act-modal-loading"><span class="spinner"></span> Chargement du détail…</div>
+        <p class="act-modal-msg" id="act-modal-msg" hidden></p>
+        <div class="act-modal-content" id="act-modal-content" hidden>
+          <div class="act-map-wrap" id="act-map-wrap"><canvas id="act-map-canvas"></canvas></div>
+          <div class="act-detail-block" id="act-hrzones-block">
+            <h4>Temps en zones de fréquence cardiaque</h4>
+            <div class="hrzone-bar" id="hrzone-bar"></div>
+            <div class="hrzone-legend" id="hrzone-legend"></div>
+          </div>
+          <div class="act-detail-block" id="act-splits-block">
+            <h4>Splits au kilomètre</h4>
+            <div class="splits-list" id="splits-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="app-footer">
+      <p>App personnelle de Nathan Martel — données via Garmin Connect, stockées uniquement dans ce navigateur.</p>
+    </footer>
+
+    <script src="js/config.js?v=7"></script>
+    <script src="js/api.js?v=7"></script>
+    <script src="js/import.js?v=7"></script>
+    <script src="js/weather.js?v=7"></script>
+    <script src="js/analysis.js?v=7"></script>
+    <script src="js/demo.js?v=7"></script>
+    <script src="js/ai-key.js?v=7"></script>
+    <script src="js/ai-unlock.js?v=7"></script>
+    <script src="js/ai.js?v=7"></script>
+    <script src="js/app.js?v=7"></script>
+    <script src="js/pwa.js?v=7"></script>
+  </body>
+</html>

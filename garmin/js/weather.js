@@ -188,5 +188,45 @@
     };
   }
 
-  window.Weather = { getCity, setCity, fetchToday, analyzeForRun };
+  /* ---------------- Historical temperatures (run ↔ weather) ---------------- */
+
+  const ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
+  const histCacheKey = id => `garmin_prof_${id || getActiveId()}_weather_hist`;
+
+  /* Returns a Map<YYYY-MM-DD, meanTempC> covering the athlete's runs (capped to
+     the last ~365 days). Uses the free Open-Meteo archive (ERA5); the most recent
+     ~5 days may be missing — those runs simply get no temperature. Cached per
+     profile/city/range. Returns null if no city. */
+  async function fetchRunTemps(id, runs) {
+    const city = getCity(id);
+    if (!city || !runs || !runs.length) return null;
+
+    const today = todayStr();
+    const earliest = runs.reduce((min, r) => (r.date < min ? r.date : min), today).slice(0, 10);
+    const floor = new Date(); floor.setDate(floor.getDate() - 365);
+    const start = earliest < floor.toISOString().slice(0, 10) ? floor.toISOString().slice(0, 10) : earliest;
+    const end = today;
+
+    const cached = (() => { try { return JSON.parse(localStorage.getItem(histCacheKey(id))); } catch { return null; } })();
+    if (cached && cached.city === city && cached.start <= start && cached.end >= end) {
+      return new Map(Object.entries(cached.map));
+    }
+
+    const geo = await geocode(city, id);
+    const params = new URLSearchParams({
+      latitude: geo.lat, longitude: geo.lon, start_date: start, end_date: end,
+      daily: 'temperature_2m_mean,temperature_2m_max', timezone: 'auto'
+    });
+    const res = await fetch(`${ARCHIVE_URL}?${params}`);
+    if (!res.ok) throw new Error('archive-failed');
+    const data = await res.json();
+    const times = (data.daily && data.daily.time) || [];
+    const means = (data.daily && data.daily.temperature_2m_mean) || [];
+    const map = {};
+    times.forEach((t, i) => { if (means[i] != null) map[t] = means[i]; });
+    try { localStorage.setItem(histCacheKey(id), JSON.stringify({ city, start, end, map })); } catch {}
+    return new Map(Object.entries(map));
+  }
+
+  window.Weather = { getCity, setCity, fetchToday, analyzeForRun, fetchRunTemps };
 })();

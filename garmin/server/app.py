@@ -165,6 +165,11 @@ class SyncIn(BaseModel):
     activities_limit: int = 400
 
 
+class ActivityDetailIn(BaseModel):
+    token: str
+    activity_id: int
+
+
 # --------------------------------------------------------------------------- #
 # Routes                                                                      #
 # --------------------------------------------------------------------------- #
@@ -229,3 +234,14 @@ def sync(body: SyncIn) -> dict:
     # Hand back a refreshed token so the browser session stays valid.
     data["token"] = _make_token(garmin)
     return data
+
+
+@app.post("/api/activity")
+def activity_detail(body: ActivityDetailIn) -> dict:
+    """Lazy per-activity detail (km splits, HR zones, GPS track). Token-only,
+    like /api/sync — no password, nothing stored."""
+    garmin = _client_from_token(body.token)
+    try:
+        return garmin_pull.pull_activity_detail(garmin, body.activity_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Erreur lors de la récupération du détail : {exc}") from exc

@@ -28,7 +28,11 @@ const PKEY = {
   lastSync: 'last_sync',
   weeklyGoal: 'weekly_goal',
   syncDays: 'sync_days',
-  city: 'city'                        // athlete's city, for the weather planner
+  city: 'city',                       // athlete's city, for the weather planner
+  raceKm: 'race_km',                  // goal-race distance (km)
+  raceDate: 'race_date',              // goal-race date (YYYY-MM-DD)
+  raceTarget: 'race_target',          // goal-race target time (hh:mm:ss)
+  shoes: 'shoes'                      // gear/shoe tracker (reserved for a later phase)
 };
 
 const DEMO_ID = 'demo';

@@ -417,7 +417,7 @@
       const cached = localStorage.getItem(tipsKey());
       if (cached && !force) { try { renderTips(JSON.parse(cached)); return; } catch {} }
       if (!activeKey()) {
-        wrap.innerHTML = '<div class="tip-card tip-locked">🔒 Déverrouille le coach IA (plus bas) pour tes tips du jour.</div>';
+        wrap.innerHTML = '<div class="tip-card tip-locked">🔒 Déverrouille le coach IA (page <a href="coach.html">Coach IA</a>) pour tes tips du jour.</div>';
         return;
       }
       wrap.innerHTML = '<div class="tip-card tip-loading"><span class="ai-cursor">▍</span> génération de tes tips…</div>';
@@ -511,49 +511,58 @@
       return { objective: $('ai-plan-objective').value, raceKm: $('ai-plan-km').value.trim(), targetTime: $('ai-plan-time').value.trim(), weeks: $('ai-plan-weeks').value.trim(), sessions: $('ai-plan-sessions').value.trim(), notes: $('ai-plan-notes').value.trim() };
     }
 
+    /* Mount is called on every page that hosts ANY AI element. The full coach UI
+       (chat, model, plan form, key gate) only exists on the Coach page, so its
+       wiring is guarded; the lightweight extras (tips, alert, last-run comment)
+       guard their own elements and run wherever they appear. */
     function mount(data) {
       mountedData = data;
       summary = buildAthleteSummary(data);
       turns = loadTurns();
-      $('ai-chat-log').innerHTML = '';
-      turns.forEach(renderTurn);
 
-      const sel = $('ai-model');
-      sel.innerHTML = FREE_MODELS.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
-      sel.value = chosenModel();
-      sel.addEventListener('change', () => setChosenModel(sel.value));
+      const chatLog = $('ai-chat-log');
+      if (chatLog) {                       // ── full coach UI (Coach page only) ──
+        chatLog.innerHTML = '';
+        turns.forEach(renderTurn);
 
-      $('ai-unlock-btn').addEventListener('click', unlockWithPassphrase);
-      $('ai-pass-input').addEventListener('keydown', e => { if (e.key === 'Enter') unlockWithPassphrase(); });
-      $('ai-own-key-btn').addEventListener('click', saveOwnKey);
-      $('ai-forget-key').addEventListener('click', () => { clearKeys(); showKeyGate(); });
+        const sel = $('ai-model');
+        sel.innerHTML = FREE_MODELS.map(m => `<option value="${m.id}">${m.label}</option>`).join('');
+        sel.value = chosenModel();
+        sel.addEventListener('change', () => setChosenModel(sel.value));
 
-      const send = () => { const text = $('ai-input').value.trim(); if (!text) return; $('ai-input').value = ''; $('ai-input').style.height = 'auto'; runConversation(text); };
-      $('ai-send').addEventListener('click', send);
-      $('ai-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-      $('ai-input').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'; });
-      $('ai-stop').addEventListener('click', () => { if (controller) controller.abort(); });
+        $('ai-unlock-btn').addEventListener('click', unlockWithPassphrase);
+        $('ai-pass-input').addEventListener('keydown', e => { if (e.key === 'Enter') unlockWithPassphrase(); });
+        $('ai-own-key-btn').addEventListener('click', saveOwnKey);
+        $('ai-forget-key').addEventListener('click', () => { clearKeys(); showKeyGate(); });
 
-      $('ai-plan-generate').addEventListener('click', () => runConversation(planRequestPrompt(readPlanForm())));
-      $('ai-clear-chat').addEventListener('click', () => { if (turns.length && !confirm('Effacer toute la conversation ?')) return; $('ai-chat-log').innerHTML = ''; turns = []; clearTurns(); });
+        const send = () => { const text = $('ai-input').value.trim(); if (!text) return; $('ai-input').value = ''; $('ai-input').style.height = 'auto'; runConversation(text); };
+        $('ai-send').addEventListener('click', send);
+        $('ai-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+        $('ai-input').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'; });
+        $('ai-stop').addEventListener('click', () => { if (controller) controller.abort(); });
 
-      // AI briefing (proactive analysis): restore this week's cached one, else invite to generate
-      const briefingBtn = $('ai-briefing-btn');
-      if (briefingBtn) {
-        const cached = localStorage.getItem(briefingKey());
-        if (cached) $('ai-briefing-output').innerHTML = renderMarkdown(cached);
-        briefingBtn.addEventListener('click', generateBriefing);
+        $('ai-plan-generate').addEventListener('click', () => runConversation(planRequestPrompt(readPlanForm())));
+        $('ai-clear-chat').addEventListener('click', () => { if (turns.length && !confirm('Effacer toute la conversation ?')) return; $('ai-chat-log').innerHTML = ''; turns = []; clearTurns(); });
+
+        // AI briefing (proactive analysis): restore this week's cached one, else invite to generate
+        const briefingBtn = $('ai-briefing-btn');
+        if (briefingBtn) {
+          const cached = localStorage.getItem(briefingKey());
+          if (cached) $('ai-briefing-output').innerHTML = renderMarkdown(cached);
+          briefingBtn.addEventListener('click', generateBriefing);
+        }
+
+        renderSuggestedQuestions();
       }
 
-      // Lightweight tips of the day: cached → render; else auto-generate once if unlocked
+      // Lightweight tips of the day (Today page): cached → render; else auto-generate if unlocked
       const tipsRefresh = $('ai-tips-refresh');
       if (tipsRefresh) tipsRefresh.addEventListener('click', () => generateTips(true));
 
-      // Data-aware starter chips (rule-based, no key needed) + cached AI extras
-      renderSuggestedQuestions();
+      // Cached AI extras — each guards its own element, so safe on any page
       runAiExtras();
 
-      if (activeKey()) hideKeyGate(); else showKeyGate();
+      if ($('ai-key-gate')) { if (activeKey()) hideKeyGate(); else showKeyGate(); }
     }
 
     return { mount };

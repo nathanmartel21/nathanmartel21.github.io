@@ -10,12 +10,19 @@
 
   if (!activeHasSession()) { window.location.replace('index.html'); return; }
 
-  /* ---------------- Chart.js theme ---------------- */
+  /* Which dashboard page is this? Set via <body data-page="…">. The dashboard is
+     split across 4 pages (today / graphs / coach / perf) that share this script;
+     renderAll dispatches to the right section group. */
+  const PAGE = document.body.dataset.page || 'today';
+
+  /* ---------------- Chart.js theme (graphs page only loads Chart.js) ---------------- */
   const FONT_MONO = "'JetBrains Mono', monospace";
-  Chart.defaults.color = '#9aa7b7';
-  Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
-  Chart.defaults.font.family = "'Inter', sans-serif";
-  Chart.defaults.font.size = 11;
+  if (window.Chart) {
+    Chart.defaults.color = '#9aa7b7';
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.font.size = 11;
+  }
 
   const ACCENT = '#00a8e8';
   const ACCENT_SOFT = 'rgba(0,168,232,0.35)';
@@ -91,6 +98,11 @@
     const avatarUrl = athlete && athlete.avatar;
     if (avatarUrl) { const img = $('profile-avatar'); img.src = avatarUrl; img.hidden = false; }
     else $('profile-avatar').hidden = true;
+  }
+
+  function markActiveNav() {
+    const link = document.querySelector(`.dash-nav [data-nav="${PAGE}"]`);
+    if (link) link.classList.add('active');
   }
 
   /* ---------------- Daily session (recovery + workout + weather) ---------------- */
@@ -568,6 +580,27 @@
     });
   }
 
+  /* Aerobic vs anaerobic Training Effect, stacked per week + focus caption. */
+  function renderTeChart(runs, days) {
+    const bal = trainingEffectBalance(runs, days);
+    const caption = $('te-focus');
+    if (!bal.hasData) {
+      caption.textContent = 'Données de Training Effect indisponibles dans cet export.';
+      if (charts.te) { charts.te.destroy(); charts.te = null; }
+      return;
+    }
+    caption.textContent = `${bal.focus.label} · ${Math.round(bal.anaeroPct)}% anaérobie — ${bal.focus.advice}`;
+    if (charts.te) charts.te.destroy();
+    charts.te = new Chart($('te-chart'), {
+      type: 'bar',
+      data: { labels: bal.weeks.map(w => w.label), datasets: [
+        { label: 'Aérobie', data: bal.weeks.map(w => Math.round(w.aerobic * 10) / 10), backgroundColor: 'rgba(0,168,232,0.55)', borderRadius: 4 },
+        { label: 'Anaérobie', data: bal.weeks.map(w => Math.round(w.anaerobic * 10) / 10), backgroundColor: 'rgba(248,113,113,0.6)', borderRadius: 4 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label} : ${ctx.parsed.y}` } } }, scales: { x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 13, font: { family: FONT_MONO, size: 10 } } }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Training Effect cumulé' } } } }
+    });
+  }
+
   function renderElevChart(runs, days) {
     const data = monthlyAggregate(runs, days, r => r.elev);
     if (charts.elev) charts.elev.destroy();
@@ -626,19 +659,273 @@
     update();
   }
 
+  /* ---------------- Race goal, projections & best efforts ---------------- */
+
+  function parseClock(str) {
+    if (!str) return 0;
+    const parts = String(str).trim().split(':').map(Number);
+    if (!parts.length || parts.some(Number.isNaN)) return 0;
+    return parts.reduce((a, p) => a * 60 + p, 0);
+  }
+
+  function raceCard(label, time, pace, extra) {
+    const paceStr = pace ? `${fmtPace(pace)} /km` : '';
+    return `<div class="race-card${time ? '' : ' empty'}">
+      <p class="race-card-dist">${label}</p>
+      <p class="race-card-time">${time || '–'}</p>
+      <p class="race-card-sub">${time ? paceStr : 'pas assez de données'}${extra ? ` · ${extra}` : ''}</p>
+    </div>`;
+  }
+
+  function renderRaceBoards(runs) {
+    $('race-predict-cards').innerHTML = racePredictions(runs)
+      .map(p => raceCard(p.label, p.time, p.pace)).join('');
+    $('race-best-cards').innerHTML = bestEfforts(runs)
+      .map(b => raceCard(b.label, b.time, b.pace, b.date ? fmtDate(b.date) : '')).join('');
+  }
+
+  function getRaceGoal() {
+    const km = Number(Profile.get(PKEY.raceKm));
+    const date = Profile.get(PKEY.raceDate);
+    if (!km || !date) return null;
+    return { km, date, targetSeconds: parseClock(Profile.get(PKEY.raceTarget)) };
+  }
+
+  function renderRaceGoal(runs) {
+    const card = $('race-goal-card');
+    const setEl = $('race-goal-set');
+    const readout = $('race-goal-readout');
+    const goal = getRaceGoal();
+    const status = goal ? raceGoalStatus(runs, goal) : null;
+
+    if (status) {
+      setEl.hidden = true;
+      readout.hidden = false;
+      const distLabel = STD_RACES.find(r => Math.abs(r.km - goal.km) < 0.01)?.label || `${goal.km} km`;
+      const daysTxt = status.days > 0 ? `J−${status.days}` : status.days === 0 ? 'Jour J' : 'terminée';
+      const ot = status.onTrack;
+      readout.innerHTML = `
+        <div class="race-goal-main">
+          <span class="race-goal-countdown" data-phase="${status.phase.key}">${daysTxt}</span>
+          <div>
+            <p class="race-goal-name">${distLabel}${status.targetStr ? ` · objectif ${status.targetStr}` : ''}</p>
+            <p class="race-goal-phase">${status.phase.label}</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="race-goal-edit">Modifier</button>
+        </div>
+        <div class="suggestion-meta">
+          <span class="pill"><span class="pill-label">Projection</span><span>${status.predictedStr || '–'}</span></span>
+          ${ot ? `<span class="pill race-ot" data-tone="${ot.tone}"><span class="pill-label">Faisabilité</span><span>${ot.label}</span></span>` : ''}
+        </div>
+        ${ot ? `<p class="race-goal-detail">${ot.detail}</p>` : ''}`;
+      $('race-goal-edit').addEventListener('click', () => { setEl.hidden = false; readout.hidden = true; });
+    } else {
+      setEl.hidden = false;
+      readout.hidden = true;
+    }
+  }
+
+  function wireRaceGoal(runs) {
+    const kmSelect = $('race-goal-km');
+    const customField = $('race-goal-customkm');
+    const goal = getRaceGoal();
+    if (goal) {
+      const std = ['5', '10', '21.0975', '42.195'].includes(String(goal.km));
+      kmSelect.value = std ? String(goal.km) : 'custom';
+      customField.hidden = std;
+      if (!std) $('race-goal-customkm-input').value = goal.km;
+      $('race-goal-date').value = goal.date;
+      $('race-goal-target').value = Profile.get(PKEY.raceTarget) || '';
+    }
+    kmSelect.addEventListener('change', () => { customField.hidden = kmSelect.value !== 'custom'; });
+    $('race-goal-save').addEventListener('click', () => {
+      const km = kmSelect.value === 'custom' ? Number($('race-goal-customkm-input').value) : Number(kmSelect.value);
+      const date = $('race-goal-date').value;
+      if (!km || !date) { return; }
+      Profile.set(PKEY.raceKm, String(km));
+      Profile.set(PKEY.raceDate, date);
+      Profile.set(PKEY.raceTarget, $('race-goal-target').value.trim());
+      renderRaceGoal(runs);
+    });
+  }
+
+  function renderRace(runs) {
+    renderRaceBoards(runs);
+    wireRaceGoal(runs);
+    renderRaceGoal(runs);
+  }
+
+  /* ---------------- Weather vs performance (async) ---------------- */
+
+  async function loadWeatherPerformance(runs) {
+    const section = $('temppace-section');
+    if (!Weather.getCity()) { section.hidden = true; return; }
+    let tempMap = null;
+    try { tempMap = await Weather.fetchRunTemps(getActiveId(), runs); }
+    catch { section.hidden = true; return; }
+
+    const analysis = tempPaceAnalysis(runs, tempMap);
+    if (!analysis || analysis.n < 6) { section.hidden = true; return; }
+
+    section.hidden = false;
+    $('temppace-note').textContent = analysis.takeaway || `${analysis.n} sorties avec température connue`;
+    if (charts.temppace) charts.temppace.destroy();
+    charts.temppace = new Chart($('temppace-chart'), {
+      type: 'scatter',
+      data: { datasets: [{ label: 'Sortie', data: analysis.points.map(p => ({ x: p.temp, y: p.pace / 60, km: p.km })), backgroundColor: 'rgba(0,168,232,0.45)', pointRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw.km.toFixed(1)} km — ${fmtPace(ctx.raw.y * 60)} à ${Math.round(ctx.raw.x)}°C` } } }, scales: { x: { title: { display: true, text: 'température (°C)' } }, y: { title: { display: true, text: 'allure (min/km)' }, ticks: { callback: v => { const m = Math.floor(v), s = Math.round((v - m) * 60); return `${m}:${String(s).padStart(2, '0')}`; } } } } }
+    });
+  }
+
   function renderActivities(activities) {
     const tbody = $('activities-body');
     const moreBtn = $('more-activities-btn');
+    const canDetail = isActiveLive() && Boolean($('act-modal'));   // detail needs a session token
     let shown = 0;
     const STEP = 15;
     function row(act) {
       const run = isRun(act);
       const pace = run ? fmtPace(paceOf(act)) : '–';
-      return `<tr><td>${fmtDate(act.date)}</td><td class="act-name">${act.name}</td><td><span class="act-type-badge ${run ? '' : 'other'}">${act.type}</span></td><td>${fmtKm(act.distance)} km</td><td>${fmtDuration(act.moving_time)}</td><td>${pace}</td><td>${Math.round(act.elev || 0)} m</td><td>${act.avg_hr ? Math.round(act.avg_hr) + ' bpm' : '–'}</td><td>${act.vo2max ? Math.round(act.vo2max) : '–'}</td></tr>`;
+      const attrs = canDetail ? ` class="act-row" data-aid="${act.id}" title="Voir le détail"` : '';
+      return `<tr${attrs}><td>${fmtDate(act.date)}</td><td class="act-name">${act.name}</td><td><span class="act-type-badge ${run ? '' : 'other'}">${act.type}</span></td><td>${fmtKm(act.distance)} km</td><td>${fmtDuration(act.moving_time)}</td><td>${pace}</td><td>${Math.round(act.elev || 0)} m</td><td>${act.avg_hr ? Math.round(act.avg_hr) + ' bpm' : '–'}</td><td>${act.vo2max ? Math.round(act.vo2max) : '–'}</td></tr>`;
     }
     function showMore() { const next = activities.slice(shown, shown + STEP); tbody.insertAdjacentHTML('beforeend', next.map(row).join('')); shown += next.length; moreBtn.hidden = shown >= activities.length; }
     moreBtn.addEventListener('click', showMore);
     showMore();
+
+    if (canDetail) {
+      tbody.addEventListener('click', e => {
+        const tr = e.target.closest('.act-row');
+        if (!tr) return;
+        const act = activities.find(a => String(a.id) === tr.getAttribute('data-aid'));
+        if (act) openActivityModal(act);
+      });
+      setupActivityModal();
+    }
+  }
+
+  /* ---------------- Activity detail modal (live: splits, HR zones, GPS) ---------------- */
+
+  const HR_ZONES = [
+    { color: '#9aa7b7', name: 'Z1 · Récup' },
+    { color: '#60a5fa', name: 'Z2 · Endurance' },
+    { color: '#34d399', name: 'Z3 · Tempo' },
+    { color: '#fbbf24', name: 'Z4 · Seuil' },
+    { color: '#f87171', name: 'Z5 · VO2max' }
+  ];
+
+  let modalWired = false;
+  function setupActivityModal() {
+    if (modalWired) return;
+    modalWired = true;
+    $('act-modal-close').addEventListener('click', closeActivityModal);
+    $('act-modal-backdrop').addEventListener('click', closeActivityModal);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('act-modal').hidden) closeActivityModal(); });
+  }
+
+  function closeActivityModal() {
+    $('act-modal').hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  function showActMsg(text) { const m = $('act-modal-msg'); m.textContent = text; m.hidden = false; }
+
+  async function openActivityModal(act) {
+    const modal = $('act-modal');
+    $('act-modal-title').textContent = act.name || 'Sortie';
+    $('act-modal-sub').textContent = `${fmtDate(act.date)} · ${fmtKm(act.distance)} km · ${fmtDuration(act.moving_time)}${isRun(act) ? ` · ${fmtPace(paceOf(act))}` : ''}`;
+    $('act-modal-content').hidden = true;
+    $('act-modal-msg').hidden = true;
+    $('act-modal-loading').hidden = false;
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    try {
+      const detail = await getActivityDetail(act.id);
+      $('act-modal-loading').hidden = true;
+      const hasTrack = detail.track && detail.track.length > 1;
+      const hasZones = detail.hr_zones && detail.hr_zones.some(z => z.secs > 0);
+      const hasSplits = detail.splits && detail.splits.length > 0;
+      if (!hasTrack && !hasZones && !hasSplits) { showActMsg('Pas de détail disponible pour cette activité.'); return; }
+      $('act-modal-content').hidden = false;
+      drawTrack(detail.track);
+      renderHrZones(detail.hr_zones);
+      renderSplits(detail.splits);
+    } catch (err) {
+      $('act-modal-loading').hidden = true;
+      showActMsg(err.message || 'Erreur de chargement du détail.');
+    }
+  }
+
+  function renderHrZones(zones) {
+    const block = $('act-hrzones-block');
+    const valid = (zones || []).filter(z => z.zone >= 1 && z.zone <= 5 && z.secs > 0);
+    const total = valid.reduce((s, z) => s + z.secs, 0);
+    if (!total) { block.hidden = true; return; }
+    block.hidden = false;
+    $('hrzone-bar').innerHTML = valid.map(z => {
+      const c = HR_ZONES[z.zone - 1];
+      return `<span class="hrzone-seg" style="width:${(z.secs / total * 100).toFixed(1)}%;background:${c.color}" title="${c.name}"></span>`;
+    }).join('');
+    $('hrzone-legend').innerHTML = valid.map(z => {
+      const c = HR_ZONES[z.zone - 1];
+      return `<span class="hrzone-leg"><span class="hrzone-dot" style="background:${c.color}"></span>${c.name} · ${fmtDuration(z.secs)} (${Math.round(z.secs / total * 100)}%)</span>`;
+    }).join('');
+  }
+
+  function renderSplits(splits) {
+    const block = $('act-splits-block');
+    if (!splits || !splits.length) { block.hidden = true; return; }
+    block.hidden = false;
+    const paces = splits.map(s => s.pace).filter(Boolean);
+    const fast = Math.min(...paces), slow = Math.max(...paces);
+    const width = p => (slow === fast ? 100 : 100 - ((p - fast) / (slow - fast)) * 55);   // faster → longer bar
+    $('splits-list').innerHTML = splits.map(s => {
+      const label = s.partial ? `${s.km}` : `${s.km}`;
+      const hr = s.avg_hr ? `${s.avg_hr} bpm` : '';
+      return `<div class="split-row${s.partial ? ' partial' : ''}">
+        <span class="split-km">${label}<small>km</small></span>
+        <span class="split-bar-wrap"><span class="split-bar" style="width:${width(s.pace).toFixed(0)}%"></span></span>
+        <span class="split-pace">${fmtPace(s.pace)}<small>/km</small></span>
+        <span class="split-hr">${hr}</span>
+      </div>`;
+    }).join('');
+  }
+
+  /* Draws a GPS track on a canvas — no map library. Equirectangular projection
+     with longitude compressed by cos(latitude); fits + centres with padding. */
+  function drawTrack(track) {
+    const wrap = $('act-map-wrap');
+    const canvas = $('act-map-canvas');
+    if (!track || track.length < 2) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = wrap.clientWidth || 600;
+    const cssH = wrap.clientHeight || 240;
+    canvas.width = cssW * dpr;
+    canvas.height = cssH * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+    track.forEach(([la, lo]) => { minLat = Math.min(minLat, la); maxLat = Math.max(maxLat, la); minLon = Math.min(minLon, lo); maxLon = Math.max(maxLon, lo); });
+    const kx = Math.cos((minLat + maxLat) / 2 * Math.PI / 180) || 1;   // lon compression
+    const pad = 16;
+    const spanX = Math.max((maxLon - minLon) * kx, 1e-6);
+    const spanY = Math.max(maxLat - minLat, 1e-6);
+    const scale = Math.min((cssW - 2 * pad) / spanX, (cssH - 2 * pad) / spanY);
+    const offX = (cssW - spanX * scale) / 2;
+    const offY = (cssH - spanY * scale) / 2;
+    const px = lo => offX + (lo - minLon) * kx * scale;
+    const py = la => cssH - (offY + (la - minLat) * scale);            // invert Y (north up)
+
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.lineWidth = 3; ctx.strokeStyle = '#00a8e8'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    track.forEach(([la, lo], i) => { const x = px(lo), y = py(la); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    const dot = (la, lo, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(px(lo), py(la), 4.5, 0, Math.PI * 2); ctx.fill(); };
+    dot(track[0][0], track[0][1], '#34d399');                          // start
+    dot(track[track.length - 1][0], track[track.length - 1][1], '#f87171');  // finish
   }
 
   /* ---------------- Render all ---------------- */
@@ -650,19 +937,38 @@
     const runs = runsOnly(activities);
 
     renderSwitcher(data.athlete);
+    markActiveNav();
+
+    if (PAGE === 'today') renderTodayPage(runs, wellness, snapshot, activities);
+    else if (PAGE === 'coach') renderCoachPage(activities, wellness, snapshot);
+    else if (PAGE === 'graphs') renderGraphsPage(runs, wellness, snapshot, activities);
+    else if (PAGE === 'perf') renderPerfPage(runs, wellness, snapshot, activities);
+
+    setLoader(false);
+    $('dash-content').classList.add('show');
+  }
+
+  /* ---------------- Per-page render groups ---------------- */
+
+  function renderTodayPage(runs, wellness, snapshot, activities) {
     renderDaily(runs, wellness, snapshot, null);
     renderInsights(runs, wellness, snapshot);
     renderMetrics(runs, wellness, snapshot);
-    if (window.AICoach) AICoach.mount({ activities, wellness, snapshot });
-
-    /* Weather (async, non-blocking): fills the weather card + the daily-session
-       weather line once Open-Meteo responds. */
-    wireWeatherControls(() => loadAndRenderWeather(runs, wellness, snapshot));
-    loadAndRenderWeather(runs, wellness, snapshot);
     renderCondition(runs);
     renderLoadRisk(runs, wellness);
+    if (window.AICoach) AICoach.mount({ activities, wellness, snapshot });   // AI tips + signal alert
+    /* Weather (async): fills the weather card + the daily-session weather line. */
+    wireWeatherControls(() => loadAndRenderWeather(runs, wellness, snapshot));
+    loadAndRenderWeather(runs, wellness, snapshot);
+  }
+
+  function renderCoachPage(activities, wellness, snapshot) {
+    if (window.AICoach) AICoach.mount({ activities, wellness, snapshot });
+  }
+
+  function renderGraphsPage(runs, wellness, snapshot, activities) {
     renderCorrelations(activities, wellness);
-    renderKpis(runs);
+    loadWeatherPerformance(runs);
 
     /* Running progression */
     setupRange($('range-weekly'), RANGES, 183, days => renderWeeklyChart(runs, days));
@@ -685,7 +991,8 @@
       setupRange($('range-hrv'), WELLNESS_RANGES, defDays, days => renderHrvChart(wellness, days));
       setupRange($('range-intensity'), RANGES, 92, days => renderIntensityChart(wellness, days));
     } else {
-      $('range-intensity').closest('.chart-card').hidden = true;
+      const intensityCard = $('range-intensity') && $('range-intensity').closest('.chart-card');
+      if (intensityCard) intensityCard.hidden = true;
     }
 
     /* Advanced */
@@ -698,12 +1005,16 @@
     setupRange($('range-distrib'), RANGES, 365, days => renderDistanceChart(runs, days));
     setupRange($('range-weekday'), RANGES, 365, days => renderWeekdayChart(runs, days));
     setupRange($('range-elev'), RANGES, 365, days => renderElevChart(runs, days));
+    setupRange($('range-te'), RANGES, 92, days => renderTeChart(runs, days));
+  }
 
+  function renderPerfPage(runs, wellness, snapshot, activities) {
+    renderKpis(runs);
+    renderRace(runs);
     renderRecords(runs);
     renderGoal(runs);
     renderActivities(activities);
-    setLoader(false);
-    $('dash-content').classList.add('show');
+    if (window.AICoach) AICoach.mount({ activities, wellness, snapshot });   // last-run AI comment
   }
 
   /* ---------------- Events ---------------- */
