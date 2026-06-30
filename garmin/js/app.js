@@ -355,9 +355,23 @@
 
   /* ---------------- Charts: axes helper ---------------- */
 
-  const timeAxis = {
-    type: 'linear', grid: { display: false },
-    ticks: { maxTicksLimit: 6, font: { family: FONT_MONO, size: 10 }, callback: v => new Date(v).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) }
+  /* A fresh time-like X axis per chart. MUST be a factory, not a shared object:
+     Chart.js annotates the scale options it's given, so reusing one object across
+     the many time charts let a wide-range chart (e.g. 1-year pace) bleed its axis
+     bounds onto a short-range one (e.g. 30-day stress), leaving an empty gap. */
+  const timeAxis = (pts) => {
+    const ax = {
+      type: 'linear', grid: { display: false },
+      ticks: { maxTicksLimit: 6, font: { family: FONT_MONO, size: 10 }, callback: v => new Date(v).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) }
+    };
+    // Clamp to this chart's own data extent so a sparse series never shows an
+    // empty leading gap (and never inherits another chart's wider range).
+    if (pts && pts.length) {
+      const xs = pts.map(p => p.date.getTime());
+      ax.min = Math.min(...xs);
+      ax.max = Math.max(...xs);
+    }
+    return ax;
   };
 
   /* ---------------- Progression charts ---------------- */
@@ -397,7 +411,7 @@
         { label: 'Sortie', data: points.map(p => ({ x: p.date.getTime(), y: p.pace / 60, name: p.name, km: p.km })), backgroundColor: ACCENT_SOFT, pointRadius: 3.5 },
         { type: 'line', label: 'Moyenne glissante', data: rolling.map(p => ({ x: p.date.getTime(), y: p.pace / 60 })), borderColor: YELLOW, pointRadius: 0, borderWidth: 2, tension: 0.35 }
       ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => { const r = ctx.raw; const pace = fmtPace(r.y * 60); return r.name ? ` ${r.name} — ${r.km.toFixed(1)} km à ${pace}` : ` ${pace}`; } } } }, scales: { x: timeAxis, y: { reverse: true, title: { display: true, text: 'allure (min/km)' }, ticks: { callback: v => { const m = Math.floor(v), s = Math.round((v - m) * 60); return `${m}:${String(s).padStart(2, '0')}`; } } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => { const r = ctx.raw; const pace = fmtPace(r.y * 60); return r.name ? ` ${r.name} — ${r.km.toFixed(1)} km à ${pace}` : ` ${pace}`; } } } }, scales: { x: timeAxis(), y: { reverse: true, title: { display: true, text: 'allure (min/km)' }, ticks: { callback: v => { const m = Math.floor(v), s = Math.round((v - m) * 60); return `${m}:${String(s).padStart(2, '0')}`; } } } } }
     });
   }
 
@@ -407,7 +421,7 @@
     charts.vo2 = new Chart($('vo2-chart'), {
       type: 'line',
       data: { datasets: [{ label: 'VO2max', data: pool.map(r => ({ x: new Date(r.date).getTime(), y: r.vo2max })), borderColor: ACCENT, backgroundColor: 'rgba(0,168,232,0.08)', fill: true, pointRadius: 2, borderWidth: 2, tension: 0.3 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` VO2max ${ctx.parsed.y.toFixed(1)}` } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'ml/kg/min' } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` VO2max ${ctx.parsed.y.toFixed(1)}` } } }, scales: { x: timeAxis(), y: { title: { display: true, text: 'ml/kg/min' } } } }
     });
   }
 
@@ -458,7 +472,7 @@
         { label, data: points.map(p => ({ x: p.date.getTime(), y: Number(p.value.toFixed(1)) })), backgroundColor: color, pointRadius: 2.5 },
         { type: 'line', label: 'Tendance', data: rolling.map(p => ({ x: p.date.getTime(), y: Number(p.value.toFixed(1)) })), borderColor: color, borderWidth: 2, pointRadius: 0, tension: 0.35 }
       ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} ${yTitle}` } } }, scales: { x: timeAxis, y: { title: { display: true, text: yTitle } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} ${yTitle}` } } }, scales: { x: timeAxis(points), y: { title: { display: true, text: yTitle } } } }
     });
   }
 
@@ -472,7 +486,7 @@
         { label: 'Max', data: hi.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: GREEN, backgroundColor: 'rgba(52,211,153,0.10)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.3 },
         { label: 'Min', data: lo.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: YELLOW, pointRadius: 0, borderWidth: 1.5, tension: 0.3 }
       ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } }, scales: { x: timeAxis, y: { beginAtZero: true, max: 100, title: { display: true, text: 'Body Battery' } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } }, scales: { x: timeAxis(hi.concat(lo)), y: { beginAtZero: true, max: 100, title: { display: true, text: 'Body Battery' } } } }
     });
   }
 
@@ -486,7 +500,7 @@
         { label: 'Dernière nuit', data: night.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: TEAL, pointRadius: 1.5, borderWidth: 1.5, tension: 0.3 },
         { label: 'Moy. semaine', data: weekly.map(p => ({ x: p.date.getTime(), y: p.value })), borderColor: ACCENT, backgroundColor: 'rgba(0,168,232,0.08)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.3 }
       ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'HRV (ms)' } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } }, scales: { x: timeAxis(weekly.concat(night)), y: { title: { display: true, text: 'HRV (ms)' } } } }
     });
   }
 
@@ -523,7 +537,7 @@
         { label: 'Sortie', data: points.map(p => ({ x: p.date.getTime(), y: p.ef })), backgroundColor: 'rgba(96,165,250,0.4)', pointRadius: 3 },
         { type: 'line', label: 'Tendance', data: rolling.map(p => ({ x: p.date.getTime(), y: p.ef })), borderColor: GREEN, borderWidth: 2, pointRadius: 0, tension: 0.35 }
       ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => ` efficience ${ctx.parsed.y.toFixed(2)} m/battement` } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'm / battement (↑ = mieux)' } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => ` efficience ${ctx.parsed.y.toFixed(2)} m/battement` } } }, scales: { x: timeAxis(), y: { title: { display: true, text: 'm / battement (↑ = mieux)' } } } }
     });
   }
 
@@ -546,7 +560,7 @@
         { label: 'Sortie', data: points.map(p => ({ x: p.date.getTime(), y: p.cadence })), backgroundColor: 'rgba(251,191,36,0.4)', pointRadius: 3 },
         { type: 'line', label: 'Moyenne glissante', data: rolling.map(p => ({ x: p.date.getTime(), y: p.cadence })), borderColor: YELLOW, borderWidth: 2, pointRadius: 0, tension: 0.35 }
       ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => ` ${Math.round(ctx.parsed.y)} pas/min` } } }, scales: { x: timeAxis, y: { title: { display: true, text: 'cadence (pas/min)' } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } }, tooltip: { callbacks: { label: ctx => ` ${Math.round(ctx.parsed.y)} pas/min` } } }, scales: { x: timeAxis(), y: { title: { display: true, text: 'cadence (pas/min)' } } } }
     });
   }
 

@@ -2,7 +2,7 @@
    Caches the app shell so the dashboard opens offline. User data lives in
    localStorage and POSTs to the relay backend are never cached. */
 
-const VERSION = 'garmin-pwa-v7';
+const VERSION = 'garmin-pwa-v8';
 const CORE_CACHE = `${VERSION}-core`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
@@ -20,16 +20,16 @@ const CORE_ASSETS = [
   './icons-512.png',
   './apple-touch-icon.png',
   './css/garmin.css?v=8',
-  './js/config.js?v=7',
-  './js/api.js?v=7',
-  './js/import.js?v=7',
-  './js/weather.js?v=7',
-  './js/app.js?v=7',
-  './js/ai.js?v=7',
-  './js/ai-key.js?v=7',
-  './js/ai-unlock.js?v=7',
-  './js/analysis.js?v=7',
-  './js/demo.js?v=7',
+  './js/config.js?v=8',
+  './js/api.js?v=8',
+  './js/import.js?v=8',
+  './js/weather.js?v=8',
+  './js/app.js?v=8',
+  './js/ai.js?v=8',
+  './js/ai-key.js?v=8',
+  './js/ai-unlock.js?v=8',
+  './js/analysis.js?v=8',
+  './js/demo.js?v=8',
 ];
 
 self.addEventListener('install', (event) => {
