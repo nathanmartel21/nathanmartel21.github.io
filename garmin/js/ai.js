@@ -22,8 +22,8 @@
   const LS_MODEL = 'garmin_ai_model';
 
   const FREE_MODELS = [
-    { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B (recommandé)' },
-    { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B' },
+    { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B (recommandé)' },
+    { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B (plus puissant)' },
     { id: 'inclusionai/ling-3.0-flash:free', label: 'Ling 3.0 Flash' },
     { id: 'openai/gpt-oss-20b:free', label: 'GPT-OSS 20B' },
     { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B' }
@@ -227,7 +227,9 @@
   async function streamChat(messages, onToken, signal, opts = {}) {
     const key = activeKey();
     if (!key) throw new Error('NO_KEY');
-    const body = { model: chosenModel(), messages, stream: true, temperature: opts.temperature ?? 0.4 };
+    // exclude reasoning tokens so a reasoning model's chain-of-thought never
+    // leaks into the visible answer (tips/comments especially).
+    const body = { model: chosenModel(), messages, stream: true, temperature: opts.temperature ?? 0.4, reasoning: { exclude: true } };
     if (opts.maxTokens) body.max_tokens = opts.maxTokens;
     const res = await fetch(OR_ENDPOINT, {
       method: 'POST', signal,
@@ -265,8 +267,18 @@
 
   function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+  /* Strip reasoning some models emit inline as <think>…</think> (closed or, mid
+     stream, still open) so their chain-of-thought never shows in the answer. */
+  function stripThink(s) {
+    return (s || '')
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/<think>[\s\S]*$/i, '')
+      .replace(/^\s*<\/think>/i, '')
+      .trim();
+  }
+
   function renderMarkdown(md) {
-    const esc = escapeHtml(md);
+    const esc = escapeHtml(stripThink(md));
     const lines = esc.split('\n');
     let html = '', inUl = false, inOl = false, inCode = false;
     const closeLists = () => { if (inUl) { html += '</ul>'; inUl = false; } if (inOl) { html += '</ol>'; inOl = false; } };
@@ -424,11 +436,15 @@
     ].join(' ');
 
     function parseTips(text) {
-      return text.split('\n').map(l => l.trim())
+      const lines = stripThink(text).split('\n').map(l => l.trim())
         .filter(Boolean)
         .map(l => l.replace(/^[-*\d.)\s]+/, '').trim())
-        .filter(l => l.length > 2)
-        .slice(0, 4);
+        .filter(l => l.length > 2);
+      // Keep only emoji-led lines (real tips); this drops any reasoning prose.
+      const emojiLed = lines.filter(l => /^\p{Extended_Pictographic}/u.test(l));
+      if (emojiLed.length) return emojiLed.slice(0, 4);
+      // Fallback: no emoji found — at least strip obvious "thinking" sentences.
+      return lines.filter(l => !/^(we |let'?s |okay|sure|count words|the user|i need|first,|now |here are)/i.test(l)).slice(0, 4);
     }
 
     function renderTips(tips) {
@@ -478,7 +494,7 @@
            { role: 'user', content: `En UNE phrase courte, stylée et factuelle (max 18 mots), commente ma dernière sortie comme un coach. Données : ${desc} Pas de blabla, pas de guillemets.` }],
           () => {}, new AbortController().signal, { maxTokens: 60, temperature: 0.7 }
         );
-        const line = full.trim().replace(/^["'\s-]+|["'\s]+$/g, '');
+        const line = stripThink(full).replace(/^["'\s-]+|["'\s]+$/g, '');
         if (line) { el.textContent = '💬 ' + line; try { localStorage.setItem(ckey, line); } catch {} }
         else el.hidden = true;
       } catch { el.hidden = true; }
@@ -504,7 +520,7 @@
            { role: 'user', content: `Signal détecté dans mes données : "${top.text}". En 1 à 2 phrases max, explique ce que ça implique pour mon entraînement et donne UNE action concrète. Direct, pas de blabla.` }],
           () => {}, new AbortController().signal, { maxTokens: 130, temperature: 0.6 }
         );
-        const line = full.trim();
+        const line = stripThink(full);
         if (line) { el.innerHTML = `<span class="ai-alert-icon">${top.icon}</span><span>${escapeHtml(line)}</span>`; try { localStorage.setItem(ckey, line); } catch {} }
         else el.hidden = true;
       } catch { el.hidden = true; }
