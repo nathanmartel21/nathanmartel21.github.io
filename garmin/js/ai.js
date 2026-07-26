@@ -9,7 +9,8 @@
    Relies on globals from config.js (Store, getActiveId) and analysis.js
    (runsOnly, periodStats, fitnessStatus, computeRecords, predictRaceTime,
    estimateZones, paceZoneDistribution, weeklySeries, wellnessStats,
-   latestWellness, buildRecommendation, fmtPace, fmtClock, fmtKm, fmtDuration,
+   latestWellness, buildRecommendation, weeklyRunBudget, trainingEffectBalance,
+   suggestRun, startOfWeek, fmtPace, fmtClock, fmtKm, fmtDuration,
    paceOf, inLastDays). */
 
 (function () {
@@ -90,9 +91,8 @@
       if (zones) out.allures_estimees = { seuil: fmtPace(zones.threshold) + '/km', endurance_facile: fmtPace(zones.easy) + '/km', allure_marathon: fmtPace(zones.marathon) + '/km', fractionne: fmtPace(zones.interval) + '/km' };
 
       out.projections_chrono = {};
-      [[5, '5 km'], [10, '10 km'], [21.1, 'semi'], [42.2, 'marathon']].forEach(([km, lbl]) => {
-        const t = predictRaceTime(runs, km, ref);
-        if (t) out.projections_chrono[lbl] = fmtClock(t);
+      currentFitnessPredictions(runs, snapshot, ref).forEach(p => {
+        if (p.time) out.projections_chrono[p.label] = { estimation: p.time, allure_km: fmtPace(p.pace), base: p.source };
       });
 
       const fs = fitnessStatus(runs, ref);
@@ -139,6 +139,25 @@
       out.reco_du_jour = { niveau: reco.level, indice_recuperation_0_100: reco.recovery, resume: reco.title };
     }
 
+    /* ---- Training rhythm & session budget (so the coach respects a 2–3×/week
+       reprise runner and never prescribes daily running) ---- */
+    if (runs.length) {
+      const budget = weeklyRunBudget(runs, ref);
+      const doneThisWeek = runs.filter(r => new Date(r.date) >= startOfWeek(ref)).length;
+      out.rythme_reel = {
+        frequence_hebdo_moyenne_4sem: round1(budget.freq),
+        budget_seances_conseille: budget.target,
+        sorties_cette_semaine: doneThisWeek,
+        statut: doneThisWeek >= budget.target
+          ? 'objectif hebdo atteint — repos conseillé'
+          : `${budget.target - doneThisWeek} séance(s) restante(s) cette semaine`
+      };
+      const teb = trainingEffectBalance(runs, 28, ref);
+      if (teb.hasData) out.equilibre_entrainement = { orientation: teb.focus.label, part_anaerobie_pct: Math.round(teb.anaeroPct), conseil: teb.focus.advice };
+      const sug = suggestRun(runs, wellness, snapshot, ref);
+      out.seance_conseillee_auj = { type: sug.type, titre: sug.title, distance: sug.distance, allure: sug.pace, pourquoi: sug.reason };
+    }
+
     /* ---- Data-science layer (so the AI reasons on correlations, not just raw numbers) ---- */
     if (runs.length) {
       const a = acwr(runs, ref);
@@ -172,10 +191,17 @@
       "   recommande explicitement de lever le pied, même si le plan prévoyait une grosse séance.",
       "3. Si l'athlète vise un objectif (distance + temps + semaines), évalue sa FAISABILITÉ via les projections",
       "   et le volume. Si irréaliste, dis-le et propose une cible atteignable (semaines, chrono intermédiaire, volume).",
-      "4. Propose un PLAN concret semaine par semaine : pour chaque séance type, distance/durée, allure cible, objectif.",
+      "4. RESPECTE LE RYTHME RÉEL de l'athlète (champ `rythme_reel`) : il est en reprise et court seulement",
+      "   quelques fois par semaine. NE propose JAMAIS de courir tous les jours. Le nombre de séances/semaine",
+      "   que tu prescris ne doit PAS dépasser `budget_seances_conseille`. Si le budget de la semaine est déjà",
+      "   atteint, recommande explicitement le REPOS ou une activité douce, pas une sortie de plus.",
+      "5. Sers-toi de `equilibre_entrainement` pour cibler ce qui MANQUE : si l'athlète est très orienté endurance,",
+      "   glisse une touche de seuil/VMA ; s'il est très orienté intensité, renforce le volume facile (EF).",
+      "   Chaque séance proposée doit avoir un but clair (base aérobie, EF, seuil, VMA, sortie longue).",
+      "6. Propose un PLAN concret semaine par semaine : pour chaque séance type, distance/durée, allure cible, objectif.",
       "   Intègre montée en charge progressive, semaines d'assimilation, affûtage, ET des jours de récup calés sur les données Garmin.",
-      "5. Base TOUTES les allures sur les données réelles ci-dessous, pas sur des standards génériques.",
-      "6. Reste concret et actionnable. Utilise le Markdown (titres, listes, tableaux) pour la lisibilité.",
+      "7. Base TOUTES les allures sur les données réelles ci-dessous, pas sur des standards génériques.",
+      "8. Reste concret et actionnable. Utilise le Markdown (titres, listes, tableaux) pour la lisibilité.",
       "",
       "DONNÉES DE L'ATHLÈTE (JSON) :",
       "```json",

@@ -26,6 +26,7 @@ Deploy:        see README.md (Hugging Face Spaces / Render).
 from __future__ import annotations
 
 import base64
+import datetime as _dt
 import json
 import os
 import time
@@ -40,6 +41,17 @@ from pydantic import BaseModel
 from garminconnect import Garmin
 
 import garmin_pull
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:  # pragma: no cover
+    ZoneInfo = None
+
+try:
+    from pywebpush import webpush, WebPushException
+except Exception:  # pragma: no cover — push disabled if the dep is missing
+    webpush = None
+    WebPushException = Exception
 
 app = FastAPI(title="Garmin Live Proxy", version="1.0")
 
@@ -245,3 +257,159 @@ def activity_detail(body: ActivityDetailIn) -> dict:
         return garmin_pull.pull_activity_detail(garmin, body.activity_id)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Erreur lors de la récupération du détail : {exc}") from exc
+
+
+# --------------------------------------------------------------------------- #
+# Web Push — hydration + session-of-the-day reminders.                        #
+#                                                                             #
+# Design mirrors the rest of the app: no Garmin credentials touched. The      #
+# browser precomputes a 3-day session PLAN (client-side suggestRun) and POSTs #
+# it with the push subscription; an hourly external cron hits /api/push/tick, #
+# and we send whichever slot is due in each subscriber's OWN timezone (so DST #
+# and the Space sleeping never matter). Subscriptions live in memory only —   #
+# the browser re-subscribes on every app open, repopulating after a restart.  #
+# --------------------------------------------------------------------------- #
+
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
+
+HYDRATION_HOURS = [10, 15, 21]
+RUN_REMINDER_HOUR = 8
+
+# endpoint -> {"subscription": {...}, "prefs": {...}, "tz": str, "plan": [...], "sent": set()}
+_SUBS: dict[str, dict] = {}
+
+
+class SubscribeIn(BaseModel):
+    subscription: dict
+    prefs: dict = {}
+    tz: str = "Europe/Paris"
+    plan: list = []
+
+
+class EndpointIn(BaseModel):
+    endpoint: str
+
+
+class TickIn(BaseModel):
+    secret: str = ""
+
+
+def _push_enabled() -> bool:
+    return bool(webpush and VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
+
+
+def _send(sub: dict, title: str, body: str, tag: str) -> bool:
+    """Send one push; drop the subscription on 404/410 (expired)."""
+    if not _push_enabled():
+        return False
+    payload = json.dumps({"title": title, "body": body, "tag": tag, "url": "./app.html"})
+    try:
+        webpush(
+            subscription_info=sub["subscription"],
+            data=payload,
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims={"sub": VAPID_SUBJECT},
+        )
+        return True
+    except WebPushException as exc:  # noqa: BLE001
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status in (404, 410):
+            _SUBS.pop(sub["subscription"].get("endpoint", ""), None)
+        return False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _local_now(tzname: str) -> _dt.datetime:
+    if ZoneInfo is not None:
+        try:
+            return _dt.datetime.now(ZoneInfo(tzname))
+        except Exception:  # noqa: BLE001 — unknown tz / missing tzdata
+            pass
+    return _dt.datetime.now()
+
+
+@app.get("/api/push/vapid")
+def push_vapid() -> dict:
+    return {"key": VAPID_PUBLIC_KEY, "enabled": _push_enabled()}
+
+
+@app.post("/api/push/subscribe")
+def push_subscribe(body: SubscribeIn) -> dict:
+    endpoint = (body.subscription or {}).get("endpoint")
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="Abonnement invalide.")
+    existing = _SUBS.get(endpoint, {})
+    _SUBS[endpoint] = {
+        "subscription": body.subscription,
+        "prefs": body.prefs or {},
+        "tz": body.tz or "Europe/Paris",
+        "plan": body.plan or [],
+        "sent": existing.get("sent", set()),
+    }
+    return {"status": "ok"}
+
+
+@app.post("/api/push/unsubscribe")
+def push_unsubscribe(body: EndpointIn) -> dict:
+    _SUBS.pop(body.endpoint, None)
+    return {"status": "ok"}
+
+
+@app.post("/api/push/test")
+def push_test(body: EndpointIn) -> dict:
+    sub = _SUBS.get(body.endpoint)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Abonnement inconnu.")
+    ok = _send(sub, "🔔 Test réussi", "Tes rappels Garmin Premium fonctionnent 👌", "garmin-test")
+    return {"status": "ok" if ok else "failed"}
+
+
+@app.post("/api/push/tick")
+def push_tick(body: TickIn, request: Request) -> dict:
+    """Called hourly by the cron. Sends the slot due in each subscriber's local
+    time (hydration at 10/15/21h, session reminder at 8h)."""
+    secret = body.secret or request.headers.get("x-cron-secret", "")
+    if CRON_SECRET and secret != CRON_SECRET:
+        raise HTTPException(status_code=401, detail="Bad cron secret.")
+    if not _push_enabled():
+        return {"status": "push_disabled", "sent": 0}
+
+    sent = 0
+    for endpoint, sub in list(_SUBS.items()):
+        now = _local_now(sub.get("tz", "Europe/Paris"))
+        hour = now.hour
+        today = now.date().isoformat()
+        prefs = sub.get("prefs", {})
+        seen: set = sub.setdefault("sent", set())
+
+        # Hydration reminders.
+        if prefs.get("hydration") and hour in HYDRATION_HOURS:
+            key = f"{today}:hydration_{hour}"
+            if key not in seen:
+                msgs = {10: "Un grand verre d’eau pour bien démarrer 💧",
+                        15: "Pause hydratation — bois un coup 💧",
+                        21: "Dernier verre d’eau de la journée 💧"}
+                if _send(sub, "💧 Hydratation", msgs.get(hour, "Pense à boire de l’eau."), f"hydration-{hour}"):
+                    seen.add(key)
+                    sent += 1
+
+        # Session-of-the-day reminder (only on days with a session in the plan).
+        if prefs.get("run") and hour == RUN_REMINDER_HOUR:
+            key = f"{today}:run"
+            if key not in seen:
+                entry = next((p for p in sub.get("plan", []) if p.get("date") == today), None)
+                if entry and entry.get("session"):
+                    body_txt = entry.get("body") or entry.get("title") or "Séance conseillée aujourd’hui."
+                    if _send(sub, "🏃 Séance du jour", body_txt, "run-reminder"):
+                        seen.add(key)
+                        sent += 1
+
+        # Keep the per-endpoint "sent" set from growing without bound.
+        if len(seen) > 40:
+            sub["sent"] = {k for k in seen if k.startswith(today)}
+
+    return {"status": "ok", "sent": sent, "subscribers": len(_SUBS)}

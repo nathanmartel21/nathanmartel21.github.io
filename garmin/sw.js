@@ -2,7 +2,7 @@
    Caches the app shell so the dashboard opens offline. User data lives in
    localStorage and POSTs to the relay backend are never cached. */
 
-const VERSION = 'garmin-pwa-v8';
+const VERSION = 'garmin-pwa-v9';
 const CORE_CACHE = `${VERSION}-core`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
@@ -19,17 +19,18 @@ const CORE_ASSETS = [
   './icons-192.png',
   './icons-512.png',
   './apple-touch-icon.png',
-  './css/garmin.css?v=8',
-  './js/config.js?v=8',
-  './js/api.js?v=8',
-  './js/import.js?v=8',
-  './js/weather.js?v=8',
-  './js/app.js?v=8',
-  './js/ai.js?v=8',
-  './js/ai-key.js?v=8',
-  './js/ai-unlock.js?v=8',
-  './js/analysis.js?v=8',
-  './js/demo.js?v=8',
+  './css/garmin.css?v=9',
+  './js/config.js?v=9',
+  './js/api.js?v=9',
+  './js/import.js?v=9',
+  './js/weather.js?v=9',
+  './js/app.js?v=9',
+  './js/ai.js?v=9',
+  './js/ai-key.js?v=9',
+  './js/ai-unlock.js?v=9',
+  './js/analysis.js?v=9',
+  './js/notifications.js?v=9',
+  './js/demo.js?v=9',
 ];
 
 self.addEventListener('install', (event) => {
@@ -53,6 +54,33 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// --- Web Push: hydration + session-of-the-day reminders ---
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data && event.data.text() }; }
+  const title = data.title || 'Garmin Premium';
+  const options = {
+    body: data.body || '',
+    icon: './icons-192.png',
+    badge: './icons-192.png',
+    tag: data.tag || 'garmin-reminder',
+    data: { url: data.url || './app.html' },
+    vibrate: [80, 40, 80],
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || './app.html';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    })
+  );
 });
 
 self.addEventListener('fetch', (event) => {

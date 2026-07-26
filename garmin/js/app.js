@@ -112,7 +112,7 @@
      plus, in extreme heat with no good window, an override toward shifting/resting. */
   function renderDaily(runs, wellness, snapshot, weatherAnalysis) {
     const reco = buildRecommendation(runs, wellness, snapshot);
-    const sug = suggestRun(runs);
+    const sug = suggestRun(runs, wellness, snapshot);
     const card = $('reco-card');
     card.setAttribute('data-level', reco.level);
     $('reco-score').textContent = reco.recovery;
@@ -691,11 +691,29 @@
     </div>`;
   }
 
-  function renderRaceBoards(runs) {
-    $('race-predict-cards').innerHTML = racePredictions(runs)
-      .map(p => raceCard(p.label, p.time, p.pace)).join('');
+  function raceExtra(p) {
+    if (!p.time) return '';
+    const src = p.source === 'vo2+courses' ? 'VO2max + courses'
+      : p.source === 'vo2' ? 'VO2max' : 'courses récentes';
+    if (p.heatPenalty > 0.01 && p.adjTime) return `${src} · ~${p.adjTime} à ${Math.round(p.tempC)}°C`;
+    return src;
+  }
+
+  async function renderRaceBoards(runs, snapshot) {
+    const render = tempC => {
+      $('race-predict-cards').innerHTML = currentFitnessPredictions(runs, snapshot, new Date(), tempC)
+        .map(p => raceCard(p.label, p.time, p.pace, raceExtra(p))).join('');
+    };
+    render(null);
     $('race-best-cards').innerHTML = bestEfforts(runs)
       .map(b => raceCard(b.label, b.time, b.pace, b.date ? fmtDate(b.date) : '')).join('');
+    // Re-render with today's temperature (heat-adjusted times) once we have it.
+    try {
+      const w = await Weather.fetchToday();
+      const t = w && w.now && w.now.temp != null ? w.now.temp
+        : (w && w.tempMax != null ? w.tempMax : null);
+      if (t != null) render(t);
+    } catch { /* no city / offline — baseline projection stands */ }
   }
 
   function getRaceGoal() {
@@ -763,8 +781,8 @@
     });
   }
 
-  function renderRace(runs) {
-    renderRaceBoards(runs);
+  function renderRace(runs, snapshot) {
+    renderRaceBoards(runs, snapshot);
     wireRaceGoal(runs);
     renderRaceGoal(runs);
   }
@@ -971,6 +989,7 @@
     renderCondition(runs);
     renderLoadRisk(runs, wellness);
     if (window.AICoach) AICoach.mount({ activities, wellness, snapshot });   // AI tips + signal alert
+    if (window.Notif) Notif.mount({ activities, wellness, snapshot });       // push reminders (hydration + session)
     /* Weather (async): fills the weather card + the daily-session weather line. */
     wireWeatherControls(() => loadAndRenderWeather(runs, wellness, snapshot));
     loadAndRenderWeather(runs, wellness, snapshot);
@@ -1024,7 +1043,7 @@
 
   function renderPerfPage(runs, wellness, snapshot, activities) {
     renderKpis(runs);
-    renderRace(runs);
+    renderRace(runs, snapshot);
     renderRecords(runs);
     renderGoal(runs);
     renderActivities(activities);

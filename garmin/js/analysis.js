@@ -419,6 +419,80 @@ function racePredictions(runs, ref = new Date()) {
   });
 }
 
+/* ---- Current-fitness race prediction from VO2max (Daniels / VDOT model) ----
+   Unlike the Riegel projection above (which extrapolates a recent RACE effort),
+   this estimates times straight from the athlete's current VO2max — i.e. their
+   physiological condition today, even without a recent hard run. */
+
+/* Fraction of VO2max sustainable for a race lasting t minutes (Daniels). */
+function danielsPctMax(tMin) {
+  return 0.8 + 0.1894393 * Math.exp(-0.012778 * tMin) + 0.2989558 * Math.exp(-0.1932605 * tMin);
+}
+/* Velocity (m/min) achievable at a given oxygen cost, inverting Daniels'
+   VO2 = -4.60 + 0.182258·v + 0.000104·v². */
+function danielsVelocity(vo2) {
+  const a = 0.000104, b = 0.182258, c = -(4.60 + vo2);
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return NaN;
+  return (-b + Math.sqrt(disc)) / (2 * a);
+}
+/* Predict a race time (seconds) for `raceKm` from a VO2max (≈ VDOT). */
+function predictFromVO2max(vo2max, raceKm) {
+  if (!vo2max || vo2max < 20 || !raceKm) return null;
+  const distM = raceKm * 1000;
+  let tMin = raceKm * 5;                          // seed ~5 min/km
+  for (let i = 0; i < 40; i++) {
+    const v = danielsVelocity(vo2max * danielsPctMax(tMin));
+    if (!isFinite(v) || v <= 0) return null;
+    const next = distM / v;
+    if (Math.abs(next - tMin) < 0.0005) { tMin = next; break; }
+    tMin = next;
+  }
+  return tMin * 60;
+}
+
+/* Best current VO2max estimate: Garmin's snapshot value, else the peak per-run
+   VO2max over the last 90 days. */
+function currentVO2max(runs, snapshot, ref = new Date()) {
+  if (snapshot && snapshot.vo2max_running) return snapshot.vo2max_running;
+  const recent = runs.filter(r => inLastDays(r, 90, ref) && r.vo2max);
+  return recent.length ? Math.max(...recent.map(r => r.vo2max)) : null;
+}
+
+/* Heat slowdown fraction for a race of `raceKm` at `tempC`. Optimal ~15 °C;
+   longer races suffer more. Capped at 15 %. */
+function heatPenalty(raceKm, tempC) {
+  if (tempC == null) return 0;
+  const over = Math.max(0, tempC - 15);
+  if (!over) return 0;
+  const k = raceKm <= 5 ? 0.003 : raceKm <= 10 ? 0.004 : raceKm <= 21.1 ? 0.006 : 0.009;
+  return Math.min(over * k, 0.15);
+}
+
+/* Current-fitness projections per standard distance: blends the VO2max model
+   with the recent-run Riegel projection (VO2max = the "condition today" anchor,
+   recent runs ground it in reality), and — when `tempC` is known — adds a
+   heat-adjusted time for today's conditions. */
+function currentFitnessPredictions(runs, snapshot, ref = new Date(), tempC = null) {
+  const vo2 = currentVO2max(runs, snapshot, ref);
+  return STD_RACES.map(r => {
+    const vFit = vo2 ? predictFromVO2max(vo2, r.km) : null;
+    const vRieg = predictRaceTime(runs, r.km, ref);
+    let sec = null, source = null;
+    if (vFit && vRieg) { sec = (vFit + vRieg) / 2; source = 'vo2+courses'; }
+    else if (vFit) { sec = vFit; source = 'vo2'; }
+    else if (vRieg) { sec = vRieg; source = 'courses'; }
+    const heat = sec ? heatPenalty(r.km, tempC) : 0;
+    const adj = sec ? sec * (1 + heat) : null;
+    return {
+      km: r.km, label: r.label, seconds: sec,
+      time: sec ? fmtClock(sec) : null, pace: sec ? sec / r.km : null,
+      source, vo2max: vo2, heatPenalty: heat,
+      adjSeconds: adj, adjTime: adj ? fmtClock(adj) : null, tempC
+    };
+  });
+}
+
 /* Best estimated efforts over ALL history (the peak you've ever projected), with
    the source run. A run must be at least 60% of the target distance to give a
    credible Riegel estimate. */
@@ -475,39 +549,100 @@ function raceGoalStatus(runs, goal, ref = new Date()) {
   };
 }
 
-function suggestRun(runs, ref = new Date()) {
+/* Weekly session budget inferred from the athlete's OWN recent cadence, so a
+   2–3×/week "reprise" runner is never pushed to run daily. Target = their
+   average runs/week over the last 4 weeks, floored at 2, capped at 6. */
+function weeklyRunBudget(runs, ref = new Date()) {
+  const last28 = runs.filter(r => inLastDays(r, 28, ref));
+  const freq = last28.length / 4;
+  const target = Math.max(2, Math.min(6, Math.round(freq || 2)));
+  return { freq, target };
+}
+
+/* Recovery-aware daily suggestion. The big change vs. the old version: it
+   reasons on a weekly SESSION BUDGET (the athlete's real rhythm) and treats
+   REST as a first-class recommendation on off-days, instead of proposing a run
+   almost every day. When a session IS due, its type is chosen by what the
+   training lacks (aerobic base / easy / threshold / VO2max) crossed with the
+   Garmin recovery verdict. `wellness`/`snapshot` are optional. */
+function suggestRun(runs, wellness = [], snapshot = {}, ref = new Date()) {
   const zones = estimateZones(runs, ref);
   if (!runs.length || !zones) return { type: 'Endurance', title: 'Première sortie !', desc: 'Pas encore assez de données : pars sur une sortie facile en aisance respiratoire pour poser la première brique.', distance: '5 km', pace: 'Allure conversationnelle', reason: 'Aucun historique récent.' };
+
   const today = startOfDay(ref);
   const stats = periodStats(runs, ref);
+  const { target } = weeklyRunBudget(runs, ref);
+
+  const weekStart = startOfWeek(ref);
+  const doneThisWeek = runs.filter(r => new Date(r.date) >= weekStart).length;
+  const remaining = target - doneThisWeek;
+  const dayIdx = (ref.getDay() + 6) % 7;           // Mon = 0
+  const daysLeftInWeek = 7 - dayIdx;               // includes today
+
   const last7 = sumStats(runs.filter(r => inLastDays(r, 7, ref)));
-  /* Baseline = recent 4-week weekly average (not 4–8 weeks ago), so a legit,
-     established ramp-up isn't mistaken for an acute spike. */
   const weeklyAvg = Math.max(stats.last28.km / 4, 5);
   const lastRun = runs[0];
   const daysSince = Math.round((today - startOfDay(new Date(lastRun.date))) / 86400000);
-  const avgDist = stats.last28.count ? stats.last28.km / stats.last28.count : last7.km / Math.max(last7.count, 1) || 6;
+  const avgDist = stats.last28.count ? stats.last28.km / stats.last28.count : 6;
   const last90 = runs.filter(r => inLastDays(r, 90, ref));
   const longest90 = Math.max(...last90.map(r => r.distance / 1000), avgDist);
-  const lastWasHard = paceOf(lastRun) <= zones.threshold + 10;
-  const lastWasLong = lastRun.distance / 1000 >= Math.max(avgDist * 1.4, 12);
-  const last7Runs = runs.filter(r => inLastDays(r, 7, ref));
-  const hadQuality = last7Runs.some(r => paceOf(r) <= zones.threshold + 10);
-  const hadLong = last7Runs.some(r => r.distance / 1000 >= Math.max(avgDist * 1.4, 12));
   const km = v => `${Math.round(v)} km`;
 
-  if (daysSince === 0) return { type: 'Récup', title: 'Déjà couru aujourd’hui — récupère', desc: "Tu as déjà une sortie au compteur aujourd'hui. Si tu veux ressortir, contente-toi d'un footing de délassement très court, sinon repos complet.", distance: '0 – 4 km', pace: fmtPace(zones.easy + 30), reason: 'Sortie déjà enregistrée aujourd’hui.' };
-  if (last7.km > weeklyAvg * 1.5 && last7.km > 15) return { type: 'Repos', title: 'Lève le pied', desc: `Tu as couru ${last7.km.toFixed(0)} km sur 7 jours contre ${weeklyAvg.toFixed(0)} km habituellement : la charge monte trop vite. Repos ou footing très léger.`, distance: '0 – 5 km', pace: fmtPace(zones.easy + 30), reason: `Charge aiguë : ${last7.km.toFixed(0)} km / 7 j.` };
-  if (daysSince >= 4) return { type: 'Reprise', title: 'Reprise en douceur', desc: `${daysSince} jours sans courir : repars sur une sortie courte en endurance fondamentale, sans regarder le chrono.`, distance: km(Math.max(avgDist * 0.7, 4)), pace: fmtPace(zones.easy), reason: `Dernière sortie il y a ${daysSince} jours.` };
-  if (daysSince === 1 && (lastWasHard || lastWasLong)) return { type: 'Endurance', title: 'Footing d’assimilation', desc: `Hier c'était ${lastWasLong ? 'long' : 'intense'} (${fmtKm(lastRun.distance)} km à ${fmtPace(paceOf(lastRun))}). Aujourd'hui : endurance fondamentale stricte.`, distance: km(Math.max(avgDist * 0.8, 5)), pace: fmtPace(zones.easy), reason: 'Séance exigeante la veille.' };
-  const dow = ref.getDay();
-  if ((dow === 6 || dow === 0) && !hadLong && stats.last28.count >= 4) { const target = Math.min(longest90 * 1.1, avgDist * 1.8 + 2); return { type: 'Sortie longue', title: 'C’est le jour de la sortie longue', desc: 'Pas de sortie longue cette semaine : profite du week-end pour construire l’endurance. Allure souple, on cherche la durée.', distance: km(Math.max(target, 10)), pace: fmtPace(zones.easy + 10), reason: 'Week-end + aucune sortie longue sur 7 jours.' }; }
-  if (!hadQuality && stats.last28.count >= 6) {
-    const weekParity = Math.floor(today.getTime() / (7 * 86400000)) % 2;
-    if (weekParity === 0) return { type: 'Tempo', title: 'Séance seuil', desc: 'Échauffement 15 min, puis 2 × 10 min à allure seuil (récup 3 min trot), retour au calme. La séance qui fait progresser ton allure de course.', distance: km(Math.max(avgDist, 8)), pace: `${fmtPace(zones.threshold)} sur les blocs`, reason: 'Aucune séance de qualité sur 7 jours.' };
-    return { type: 'Intervalles', title: 'Fractionné court', desc: 'Échauffement 15 min, puis 8 × 400 m vite (récup 1 min trot), retour au calme. Objectif : VMA et économie de course.', distance: km(Math.max(avgDist * 0.9, 7)), pace: `${fmtPace(zones.interval)} sur les 400 m`, reason: 'Aucune séance de qualité sur 7 jours.' };
+  const reco = wellness.length ? buildRecommendation(runs, wellness, snapshot, ref) : null;
+  const recovery = reco ? reco.recovery : null;
+  const teb = trainingEffectBalance(runs, 28, ref);   // aerobic vs anaerobic focus
+
+  const last7Runs = runs.filter(r => inLastDays(r, 7, ref));
+  const hadQuality = last7Runs.some(r => paceOf(r) <= zones.threshold + 10);
+  const hadLong = last7Runs.some(r => r.distance / 1000 >= Math.max(avgDist * 1.4, 10));
+  const lastWasHard = paceOf(lastRun) <= zones.threshold + 10;
+  const lastWasLong = lastRun.distance / 1000 >= Math.max(avgDist * 1.4, 10);
+
+  const rest = (title, desc, reason) => ({ type: 'Repos', title, desc, distance: '—', pace: 'Repos ou activité douce', reason });
+
+  // 1. Already ran today.
+  if (daysSince === 0) return rest('Séance faite ✅', "Tu as déjà couru aujourd'hui. Laisse le corps encaisser : étirements, marche, hydratation. Ressortir n'apporterait rien de plus.", 'Sortie déjà enregistrée aujourd’hui.');
+
+  // 2. Acute load spike → protect.
+  if (last7.km > weeklyAvg * 1.5 && last7.km > 15) return rest('Lève le pied', `Tu as couru ${last7.km.toFixed(0)} km sur 7 jours contre ${weeklyAvg.toFixed(0)} d'habitude : la charge monte trop vite. Repos ou footing très léger au maximum.`, `Charge aiguë : ${last7.km.toFixed(0)} km / 7 j.`);
+
+  // 3. Weekly budget already met → rest is the smart default (the reprise fix).
+  if (remaining <= 0) return rest('Objectif de la semaine atteint', `Tu as déjà tes ${doneThisWeek} sorties cette semaine (ton rythme ≈ ${target}/sem). C'est au repos que le corps encaisse le travail. Garde-toi pour ta prochaine séance.`, `${doneThisWeek}/${target} sorties cette semaine.`);
+
+  // 4. Low recovery → rest even if the budget still has room.
+  if (recovery != null && recovery < 45) return rest('Priorité récupération', 'Ta récupération est basse (readiness, sommeil ou Body Battery en berne). Repos ou footing de délassement très court. Forcer maintenant augmente le risque de blessure.', `Récup ${recovery}/100.`);
+
+  // 5. Day after a hard/long session → easy assimilation only.
+  if (daysSince === 1 && (lastWasHard || lastWasLong)) return { type: 'Endurance', title: 'Footing d’assimilation', desc: `Hier c'était ${lastWasLong ? 'long' : 'intense'} (${fmtKm(lastRun.distance)} km à ${fmtPace(paceOf(lastRun))}). Si tu sors aujourd'hui : endurance fondamentale stricte, sinon repos.`, distance: km(Math.max(avgDist * 0.8, 5)), pace: fmtPace(zones.easy), reason: 'Séance exigeante la veille.' };
+
+  // 6. Long time off → gentle comeback.
+  if (daysSince >= 5) return { type: 'Reprise', title: 'Reprise en douceur', desc: `${daysSince} jours sans courir : repars court en endurance fondamentale, sans regarder le chrono.`, distance: km(Math.max(avgDist * 0.7, 4)), pace: fmtPace(zones.easy), reason: `Dernière sortie il y a ${daysSince} jours.` };
+
+  // A session is due this week. Space them out: if we ran recently and there are
+  // still more days left than sessions remaining, hold today and run fresh later.
+  const idealGap = Math.max(1, Math.round(7 / target));
+  if (daysSince < idealGap && daysLeftInWeek > remaining) return rest('Repos aujourd’hui', `Ton rythme est de ~${target} sorties/semaine. Il te reste ${remaining} séance(s) pour ${daysLeftInWeek} jours : espace-les. Tu cours mieux demain, frais.`, `Espacement (${remaining} séance(s) restante(s), ${daysLeftInWeek} j).`);
+
+  // Missing a long run this week → long run (needs the room / week's end).
+  if (!hadLong && (daysLeftInWeek <= remaining + 1 || dayIdx >= 4)) {
+    const t = Math.min(longest90 * 1.1, avgDist * 1.6 + 2);
+    return { type: 'Sortie longue', title: 'Sortie longue', desc: 'Pas de sortie longue cette semaine : construis l’endurance. Allure souple, on cherche la durée, pas le chrono.', distance: km(Math.max(t, 8)), pace: fmtPace(zones.easy + 10), reason: 'Aucune sortie longue cette semaine.' };
   }
-  return { type: 'Endurance', title: 'Endurance fondamentale', desc: 'Sortie classique en aisance respiratoire : c’est elle qui construit 80 % de la progression. Allure où tu peux tenir une conversation.', distance: km(Math.max(avgDist, 5)), pace: fmtPace(zones.easy), reason: 'Semaine équilibrée — on consolide la base aérobie.' };
+
+  // Lacking intensity (aerobic-heavy) + good recovery + enough volume → quality.
+  const lacksIntensity = teb.hasData ? teb.focus.key === 'base' : false;
+  const recoveryOk = recovery == null || recovery >= 60;
+  if (!hadQuality && lacksIntensity && recoveryOk && target >= 3) {
+    const weekParity = Math.floor(today.getTime() / (7 * 86400000)) % 2;
+    if (weekParity === 0) return { type: 'Seuil', title: 'Séance seuil', desc: 'Échauffement 15 min, puis 2 × 10 min à allure seuil (récup 3 min trot), retour au calme. C’est elle qui débloque ta vitesse de course.', distance: km(Math.max(avgDist, 8)), pace: `${fmtPace(zones.threshold)} sur les blocs`, reason: 'Manque d’intensité : ta charge est très orientée endurance.' };
+    return { type: 'VMA', title: 'Fractionné court (VMA)', desc: 'Échauffement 15 min, puis 8 × 400 m vite (récup 1 min trot), retour au calme. Objectif VO2max et économie de course.', distance: km(Math.max(avgDist * 0.9, 6)), pace: `${fmtPace(zones.interval)} sur les 400 m`, reason: 'Manque d’intensité : ta charge est très orientée endurance.' };
+  }
+
+  // Too much intensity lately → deliberately easy to rebuild the aerobic base.
+  if (teb.hasData && teb.focus.key === 'intense') return { type: 'Endurance', title: 'Endurance fondamentale', desc: 'Ta charge récente est très intense : aujourd’hui, du facile pur pour consolider la base aérobie et récupérer.', distance: km(Math.max(avgDist, 5)), pace: fmtPace(zones.easy), reason: 'Trop d’intensité récente — on rééquilibre vers l’aérobie.' };
+
+  // Default: easy endurance — the bread and butter.
+  return { type: 'Endurance', title: 'Endurance fondamentale', desc: 'Sortie en aisance respiratoire : c’est elle qui construit 80 % de la progression. Allure où tu peux tenir une conversation.', distance: km(Math.max(avgDist, 5)), pace: fmtPace(zones.easy), reason: `Séance ${doneThisWeek + 1}/${target} de la semaine — on consolide la base.` };
 }
 
 /* ================================================================ */

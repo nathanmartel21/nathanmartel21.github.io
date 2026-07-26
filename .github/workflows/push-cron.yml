@@ -1,0 +1,25 @@
+name: Push reminders cron
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/push/tick
+        run: |
+          if [ -z "${{ secrets.GARMIN_BACKEND_URL }}" ]; then
+            echo "GARMIN_BACKEND_URL secret is not set — skipping."
+            exit 0
+          fi
+          code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -m 60 \
+            -X POST "${{ secrets.GARMIN_BACKEND_URL }}/api/push/tick" \
+            -H 'Content-Type: application/json' \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -d '{"secret":"${{ secrets.CRON_SECRET }}"}')
+          echo "HTTP $code"; cat /tmp/resp.json || true
+          # A sleeping Space may return 503 on the first hit; don't fail the run.
+          if [ "$code" != "200" ]; then echo "Non-200 (likely Space waking) — ok."; fi
