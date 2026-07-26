@@ -22,11 +22,11 @@
   const LS_MODEL = 'garmin_ai_model';
 
   const FREE_MODELS = [
-    { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (recommandé)' },
-    { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B' },
-    { id: 'qwen/qwen3-next-80b-a3b-instruct:free', label: 'Qwen3 Next 80B' },
-    { id: 'nousresearch/hermes-3-llama-3.1-405b:free', label: 'Hermes 3 405B' },
-    { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B' }
+    { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B (recommandé)' },
+    { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B' },
+    { id: 'inclusionai/ling-3.0-flash:free', label: 'Ling 3.0 Flash' },
+    { id: 'openai/gpt-oss-20b:free', label: 'GPT-OSS 20B' },
+    { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B' }
   ];
   const DEFAULT_MODEL = FREE_MODELS[0].id;
 
