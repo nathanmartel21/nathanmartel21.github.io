@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Carburants au meilleur prix</title>
+  <meta name="description" content="Les stations-service les moins chères autour de toi, par carburant, prix et distance." />
+  <meta name="theme-color" content="#0c8a4a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Carburant" />
+  <style>
+    :root {
+      --bg: #f4f7f6; --card: #ffffff; --ink: #10201a; --ink-soft: #586b63;
+      --line: #dde7e2; --accent: #0c8a4a; --accent-deep: #0a6f3c; --accent-soft: #e3f5ea;
+      --amber: #c77800; --amber-soft: #fbefd8; --shadow: 0 1px 2px rgba(16,32,26,.05), 0 10px 28px rgba(16,32,26,.07);
+      --radius: 16px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0c1512; --card:#141f1b; --ink:#e9f3ee; --ink-soft:#9fb3aa; --line:#25332d;
+        --accent:#2bb673; --accent-deep:#37c983; --accent-soft:#123024; --amber:#e0a53a; --amber-soft:#33280f;
+        --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px rgba(0,0,0,.4); }
+    }
+    :root[data-theme="dark"] { --bg:#0c1512; --card:#141f1b; --ink:#e9f3ee; --ink-soft:#9fb3aa; --line:#25332d;
+      --accent:#2bb673; --accent-deep:#37c983; --accent-soft:#123024; --amber:#e0a53a; --amber-soft:#33280f;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px rgba(0,0,0,.4); }
+    :root[data-theme="light"] { --bg:#f4f7f6; --card:#ffffff; --ink:#10201a; --ink-soft:#586b63; --line:#dde7e2;
+      --accent:#0c8a4a; --accent-deep:#0a6f3c; --accent-soft:#e3f5ea; --amber:#c77800; --amber-soft:#fbefd8;
+      --shadow: 0 1px 2px rgba(16,32,26,.05), 0 10px 28px rgba(16,32,26,.07); }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--ink);
+      line-height: 1.5; -webkit-font-smoothing: antialiased; padding-bottom: env(safe-area-inset-bottom); }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+
+    header.top { padding: .6rem .2rem 1rem; }
+    header.top h1 { margin: 0; font-size: 1.5rem; letter-spacing: -.02em; display: flex; align-items: center; gap: .5rem; }
+    header.top p { margin: .25rem 0 0; color: var(--ink-soft); font-size: .92rem; }
+
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 1rem; }
+
+    .ctl-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--ink-soft); font-weight: 700; margin: 0 0 .45rem; }
+    .ctl + .ctl { margin-top: .9rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: .45rem; }
+    .chip { border: 1.5px solid var(--line); background: transparent; color: var(--ink);
+      border-radius: 999px; padding: .5rem .8rem; font: inherit; font-size: .9rem; font-weight: 600;
+      cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.1; gap: 1px; }
+    .chip small { font-weight: 500; font-size: .68rem; color: var(--ink-soft); }
+    .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-deep); }
+    .chip[aria-pressed="true"] small { color: var(--accent-deep); }
+    .chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    .locate { margin-top: 1rem; width: 100%; border: 0; border-radius: 14px; cursor: pointer;
+      background: var(--accent); color: #fff; font: inherit; font-size: 1.1rem; font-weight: 700;
+      padding: 1rem; display: flex; align-items: center; justify-content: center; gap: .55rem;
+      box-shadow: 0 8px 20px rgba(12,138,74,.28); }
+    .locate:hover { background: var(--accent-deep); }
+    .locate:disabled { opacity: .7; cursor: progress; }
+    .locate .spin { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.4);
+      border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+    .status { margin: 1rem .2rem 0; font-size: .92rem; color: var(--ink-soft); min-height: 1.2em; }
+    .status.err { color: var(--amber); font-weight: 600; }
+
+    .summary { display: none; gap: .5rem; margin: 1.1rem 0 .3rem; }
+    .summary .stat { flex: 1; background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; padding: .6rem .7rem; box-shadow: var(--shadow); }
+    .summary .stat .k { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); font-weight: 700; }
+    .summary .stat .v { font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: .1rem; }
+    .summary .stat.save .v { color: var(--accent-deep); }
+
+    .list { display: flex; flex-direction: column; gap: .6rem; margin-top: .7rem; }
+    .card { display: grid; grid-template-columns: auto 1fr auto; gap: .1rem .8rem; align-items: center;
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: .8rem .9rem; position: relative; }
+    .card .rank { grid-row: 1 / span 2; width: 2rem; height: 2rem; border-radius: 50%;
+      display: grid; place-items: center; font-weight: 800; font-size: .95rem; background: var(--accent-soft);
+      color: var(--accent-deep); font-variant-numeric: tabular-nums; }
+    .card.best .rank { background: var(--accent); color: #fff; }
+    .card .name { font-weight: 700; font-size: 1rem; letter-spacing: -.01em; }
+    .card .addr { grid-column: 2; font-size: .82rem; color: var(--ink-soft); }
+    .card .price { grid-row: 1 / span 2; text-align: right; }
+    .card .price b { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+    .card .price span { display: block; font-size: .72rem; color: var(--ink-soft); }
+    .card .meta { grid-column: 2; display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .35rem; align-items: center; }
+    .tag { font-size: .74rem; font-weight: 600; padding: .12rem .5rem; border-radius: 7px;
+      background: var(--accent-soft); color: var(--accent-deep); font-variant-numeric: tabular-nums; }
+    .tag.dist { background: var(--bg); border: 1px solid var(--line); color: var(--ink-soft); }
+    .tag.old { background: var(--amber-soft); color: var(--amber); }
+    .go { grid-column: 1 / -1; margin-top: .6rem; text-align: center; text-decoration: none;
+      border: 1.5px solid var(--accent); color: var(--accent-deep); border-radius: 11px;
+      padding: .5rem; font-weight: 700; font-size: .92rem; }
+    .go:hover { background: var(--accent-soft); }
+
+    footer.foot { margin-top: 2rem; text-align: center; font-size: .76rem; color: var(--ink-soft); }
+    footer.foot a { color: var(--accent-deep); }
+    .empty { text-align: center; color: var(--ink-soft); padding: 1.5rem 1rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>⛽ Meilleur plein</h1>
+      <p>Les stations les moins chères autour de toi — prix &amp; distance, en direct. 🇫🇷 France &amp; 🇪🇸 Espagne, selon ta position.</p>
+    </header>
+
+    <div class="panel">
+      <div class="ctl">
+        <p class="ctl-label">Carburant</p>
+        <div class="chips" id="fuel-chips"></div>
+      </div>
+      <div class="ctl">
+        <p class="ctl-label">Rayon de recherche</p>
+        <div class="chips" id="radius-chips"></div>
+      </div>
+      <div class="ctl">
+        <p class="ctl-label">Trier par</p>
+        <div class="chips" id="sort-chips"></div>
+      </div>
+      <button class="locate" id="locate-btn">
+        <span id="locate-ic">📍</span> <span id="locate-txt">Me localiser</span>
+      </button>
+    </div>
+
+    <p class="status" id="status"></p>
+
+    <div class="summary" id="summary">
+      <div class="stat"><div class="k">Le moins cher</div><div class="v" id="s-min">–</div></div>
+      <div class="stat"><div class="k">Moyenne du secteur</div><div class="v" id="s-avg">–</div></div>
+      <div class="stat save"><div class="k">Économie / plein 50 L</div><div class="v" id="s-save">–</div></div>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <footer class="foot">
+      Données officielles <a href="https://www.prix-carburants.gouv.fr" target="_blank" rel="noopener">prix-carburants.gouv.fr</a>
+      · mises à jour en continu. Vérifie sur place, un prix peut avoir changé.
+    </footer>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    const FUELS = [
+      { key: 'gazole', label: 'Gazole', sub: 'Diesel' },
+      { key: 'e10',    label: 'E10',    sub: 'SP95-E10' },
+      { key: 'sp95',   label: 'SP95',   sub: 'Essence' },
+      { key: 'sp98',   label: 'SP98',   sub: 'Essence' },
+      { key: 'e85',    label: 'E85',    sub: 'Éthanol' },
+      { key: 'gplc',   label: 'GPLc',   sub: 'GPL' },
+    ];
+    const RADII = [5, 10, 20, 30];
+    const SORTS = [
+      { key: 'malin',      label: 'Malin', sub: 'prix + distance' },
+      { key: 'moins-cher', label: 'Moins cher', sub: 'prix' },
+      { key: 'proche',     label: 'Plus proche', sub: 'distance' },
+    ];
+    // Detour cost baked into the "Malin" score: each km adds ~2 c/L of effective price.
+    const KM_PENALTY = 0.02;
+
+    // Official data sources.
+    const FR_API = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records';
+    const ES_API = 'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/';
+    const GEO_API = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
+
+    // Map our fuel keys to each country's price field.
+    const ES_FIELD = {
+      gazole: 'Precio Gasoleo A', e10: 'Precio Gasolina 95 E10', sp95: 'Precio Gasolina 95 E5',
+      sp98: 'Precio Gasolina 98 E5', e85: 'Precio Gasolina 95 E85', gplc: 'Precio Gases licuados del petróleo'
+    };
+    const FLAG = { FR: '🇫🇷 France', ES: '🇪🇸 Espagne' };
+    const esNum = v => (v && String(v).trim()) ? Number(String(v).replace(',', '.')) : null;
+
+    const $ = id => document.getElementById(id);
+    const store = {
+      get: (k, d) => { try { return localStorage.getItem('essence_' + k) ?? d; } catch { return d; } },
+      set: (k, v) => { try { localStorage.setItem('essence_' + k, v); } catch {} }
+    };
+
+    let state = {
+      fuel: store.get('fuel', 'gazole'),
+      radius: Number(store.get('radius', '10')),
+      sort: store.get('sort', 'malin'),
+      pos: null,
+      country: null,
+      esCache: null,   // { list, ts } — Spain's full dataset (12 MB), fetched once per session
+      raw: []
+    };
+
+    function chip(text, sub, pressed) {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.type = 'button'; b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      b.innerHTML = sub ? `${text}<small>${sub}</small>` : text;
+      return b;
+    }
+
+    function buildChips() {
+      const fc = $('fuel-chips'); fc.innerHTML = '';
+      FUELS.forEach(f => { const b = chip(f.label, f.sub, f.key === state.fuel);
+        b.onclick = () => { state.fuel = f.key; store.set('fuel', f.key); syncPressed(); if (state.pos) dispatch(); };
+        fc.appendChild(b); });
+      const rc = $('radius-chips'); rc.innerHTML = '';
+      RADII.forEach(r => { const b = chip(r + ' km', '', r === state.radius);
+        b.onclick = () => { state.radius = r; store.set('radius', String(r)); syncPressed(); if (state.pos) dispatch(); };
+        rc.appendChild(b); });
+      const sc = $('sort-chips'); sc.innerHTML = '';
+      SORTS.forEach(s => { const b = chip(s.label, s.sub, s.key === state.sort);
+        b.onclick = () => { state.sort = s.key; store.set('sort', s.key); syncPressed(); render(); };
+        sc.appendChild(b); });
+    }
+    function syncPressed() {
+      [['fuel-chips', FUELS.map(f => f.key), state.fuel],
+       ['radius-chips', RADII.map(String), String(state.radius)],
+       ['sort-chips', SORTS.map(s => s.key), state.sort]].forEach(([id, keys, cur]) => {
+        [...$(id).children].forEach((b, i) => b.setAttribute('aria-pressed', keys[i] === cur ? 'true' : 'false'));
+      });
+    }
+
+    function setStatus(msg, isErr) { const el = $('status'); el.textContent = msg || ''; el.className = 'status' + (isErr ? ' err' : ''); }
+
+    function haversine(a, b, c, d) {
+      const R = 6371, toR = x => x * Math.PI / 180;
+      const dLat = toR(c - a), dLon = toR(d - b);
+      const s = Math.sin(dLat/2)**2 + Math.cos(toR(a)) * Math.cos(toR(c)) * Math.sin(dLon/2)**2;
+      return R * 2 * Math.asin(Math.sqrt(s));
+    }
+
+    function locate() {
+      if (!navigator.geolocation) { setStatus('La géolocalisation n’est pas disponible sur cet appareil.', true); return; }
+      const btn = $('locate-btn'); btn.disabled = true;
+      $('locate-ic').outerHTML = '<span class="spin" id="locate-ic"></span>';
+      $('locate-txt').textContent = 'Localisation…';
+      setStatus('Recherche de ta position…');
+      navigator.geolocation.getCurrentPosition(
+        p => { state.pos = { lat: p.coords.latitude, lon: p.coords.longitude }; resetBtn(); dispatch(true); },
+        err => {
+          resetBtn();
+          const m = err.code === 1 ? 'Localisation refusée. Autorise-la dans les réglages du navigateur pour ce site.'
+                  : err.code === 3 ? 'Localisation trop longue — réessaie.'
+                  : 'Impossible de te localiser pour le moment.';
+          setStatus(m, true);
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+      );
+    }
+    function resetBtn() {
+      const btn = $('locate-btn'); btn.disabled = false;
+      const ic = $('locate-ic'); if (ic) ic.outerHTML = '<span id="locate-ic">📍</span>';
+      $('locate-txt').textContent = 'Actualiser ma position';
+    }
+
+    // Detect the country once per locate, then route to the right data source.
+    async function dispatch(redetect) {
+      if (!state.pos) return;
+      if (redetect || !state.country) {
+        setStatus('Localisation…');
+        try {
+          const r = await fetch(`${GEO_API}?latitude=${state.pos.lat}&longitude=${state.pos.lon}&localityLanguage=fr`);
+          state.country = ((await r.json()).countryCode || '').toUpperCase();
+        } catch { state.country = null; }
+      }
+      if (state.country === 'FR') return runFR();
+      if (state.country === 'ES') return runES();
+      state.raw = [];
+      $('summary').style.display = 'none'; $('list').innerHTML = '';
+      setStatus('Ce service couvre la France et l’Espagne. Tu sembles ailleurs' +
+        (state.country ? ` (${state.country})` : '') + '.', true);
+    }
+
+    async function runFR() {
+      setStatus('🇫🇷 Recherche des stations…');
+      const f = state.fuel;
+      // ODSQL v2.1 geo filter — WKT point is "POINT(lon lat)" (longitude first).
+      const point = `geom'POINT(${state.pos.lon} ${state.pos.lat})'`;
+      const where = `within_distance(geom, ${point}, ${state.radius}km) and ${f}_prix is not null`;
+      const url = `${FR_API}?where=${encodeURIComponent(where)}` +
+        `&order_by=${encodeURIComponent(f + '_prix')}&limit=100`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('API ' + res.status);
+        const data = await res.json();
+        state.raw = (data.results || []).map(r => {
+          const g = r.geom || {};
+          const price = r[f + '_prix'];
+          if (!g || g.lat == null || price == null) return null;
+          return {
+            price: Number(price), maj: r[f + '_maj'], lat: g.lat, lon: g.lon,
+            name: (r.ville || r.adresse || 'Station').trim(),
+            sub: [r.adresse, r.cp].filter(Boolean).join(' · '),
+            km: haversine(state.pos.lat, state.pos.lon, g.lat, g.lon)
+          };
+        }).filter(Boolean);
+        render();
+      } catch (e) {
+        setStatus('Erreur de connexion aux données carburants (France). Réessaie.', true);
+      }
+    }
+
+    async function loadES() {
+      if (state.esCache && Date.now() - state.esCache.ts < 2 * 3600 * 1000) return state.esCache.list;
+      setStatus('🇪🇸 Chargement des prix (première fois, ~12 Mo)…');
+      const res = await fetch(ES_API);
+      if (!res.ok) throw new Error('ES ' + res.status);
+      const data = await res.json();
+      const list = data.ListaEESSPrecio || [];
+      state.esCache = { list, ts: Date.now() };
+      return list;
+    }
+
+    async function runES() {
+      const field = ES_FIELD[state.fuel];
+      let list;
+      try { list = await loadES(); }
+      catch { setStatus('Erreur de connexion aux données carburants (Espagne). Réessaie.', true); return; }
+      setStatus('🇪🇸 Recherche des stations…');
+      const rows = [];
+      for (const r of list) {
+        const price = esNum(r[field]);
+        const la = esNum(r['Latitud']); const lo = esNum(r['Longitud (WGS84)']);
+        if (price == null || la == null || lo == null) continue;
+        const km = haversine(state.pos.lat, state.pos.lon, la, lo);
+        if (km > state.radius) continue;
+        let brand = (r['Rótulo'] || '').trim();
+        if (!brand || /^n[ºo°]/i.test(brand)) brand = (r['Municipio'] || 'Station').trim();
+        rows.push({
+          price, maj: null, lat: la, lon: lo, name: brand,
+          sub: [r['Dirección'], r['Municipio']].filter(Boolean).join(' · '),
+          km
+        });
+      }
+      state.raw = rows;
+      render();
+    }
+
+    function fmtPrice(p) { return p.toFixed(3).replace('.', ','); }
+    function fmtKm(k) { return k < 1 ? Math.round(k * 1000) + ' m' : k.toFixed(1).replace('.', ',') + ' km'; }
+    function daysAgo(iso) {
+      if (!iso) return null;
+      const d = Math.floor((Date.now() - new Date(iso)) / 86400000);
+      return d;
+    }
+
+    function sorted() {
+      const arr = [...state.raw];
+      if (state.sort === 'moins-cher') arr.sort((a, b) => a.price - b.price || a.km - b.km);
+      else if (state.sort === 'proche') arr.sort((a, b) => a.km - b.km);
+      else arr.sort((a, b) => (a.price + a.km * KM_PENALTY) - (b.price + b.km * KM_PENALTY));
+      return arr;
+    }
+
+    function render() {
+      const list = $('list'), sum = $('summary');
+      const fuelLabel = (FUELS.find(f => f.key === state.fuel) || {}).label || '';
+      if (!state.raw.length) {
+        sum.style.display = 'none'; list.innerHTML = '';
+        setStatus('');
+        list.innerHTML = `<div class="empty">Aucune station avec du <b>${fuelLabel}</b> dans un rayon de ${state.radius} km.<br>Essaie un rayon plus grand ou un autre carburant.</div>`;
+        return;
+      }
+      // summary
+      const prices = state.raw.map(s => s.price);
+      const min = Math.min(...prices);
+      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+      $('s-min').textContent = fmtPrice(min) + ' €';
+      $('s-avg').textContent = fmtPrice(avg) + ' €';
+      $('s-save').textContent = '≈ ' + ((avg - min) * 50).toFixed(2).replace('.', ',') + ' €';
+      sum.style.display = 'flex';
+
+      const top = sorted().slice(0, 10);
+      const flag = FLAG[state.country] || '';
+      setStatus(`${flag} · ${state.raw.length} stations · ${fuelLabel} · rayon ${state.radius} km`);
+      list.innerHTML = top.map((s, i) => {
+        const d = daysAgo(s.maj);
+        const old = d != null && d >= 7 ? `<span class="tag old">MàJ il y a ${d} j</span>` : '';
+        const maps = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`;
+        return `<div class="card ${i === 0 ? 'best' : ''}">
+          <div class="rank">${i + 1}</div>
+          <div class="name">${escapeHtml(s.name)}</div>
+          <div class="price"><b>${fmtPrice(s.price)}</b><span>€ / L</span></div>
+          <div class="addr">${escapeHtml(s.sub)}</div>
+          <div class="meta"><span class="tag dist">📍 ${fmtKm(s.km)}</span>${old}</div>
+          <a class="go" href="${maps}" target="_blank" rel="noopener">🧭 Y aller</a>
+        </div>`;
+      }).join('');
+    }
+
+    function escapeHtml(s) { return (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    // init
+    buildChips();
+    $('locate-btn').addEventListener('click', locate);
+    if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  })();
+  </script>
+</body>
+</html>

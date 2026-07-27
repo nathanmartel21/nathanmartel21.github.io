@@ -1,0 +1,19 @@
+{
+  "name": "Meilleur plein — carburants au meilleur prix",
+  "short_name": "Meilleur plein",
+  "description": "Les stations-service les moins chères autour de toi, par carburant, prix et distance.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c1512",
+  "theme_color": "#0c8a4a",
+  "categories": ["travel", "utilities", "navigation"],
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}
