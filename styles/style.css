@@ -612,6 +612,10 @@ a {
 .app-tile-garmin:hover { border-color: var(--garmin); background: linear-gradient(135deg, rgba(0, 168, 232, 0.10) 0%, var(--bg-card) 60%); }
 .app-tile-garmin .app-tile-name { color: var(--garmin); }
 
+.app-tile-essence .app-tile-icon { background: rgba(18, 166, 89, 0.14); }
+.app-tile-essence:hover { border-color: #12a659; background: linear-gradient(135deg, rgba(18, 166, 89, 0.10) 0%, var(--bg-card) 60%); }
+.app-tile-essence .app-tile-name { color: #12a659; }
+
 /* ------------------------------------------------------------------
    Contact
    ------------------------------------------------------------------ */
