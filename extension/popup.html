@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="top"><span class="logo">🔐</span> <b>Coffre</b><span class="spacer"></span>
+    <button id="lock" class="ic" title="Verrouiller" hidden>🔒</button></header>
+
+  <!-- import -->
+  <section id="import" hidden>
+    <p class="muted">Importe la sauvegarde <b>chiffrée</b> de ton coffre (fichier exporté depuis l’app).</p>
+    <button id="import-btn" class="btn btn-primary block">Choisir le fichier .json</button>
+    <input id="import-file" type="file" accept="application/json" hidden />
+    <p id="import-msg" class="msg"></p>
+  </section>
+
+  <!-- unlock -->
+  <section id="unlock" hidden>
+    <div class="access"><span class="dot" id="dot"></span><span id="acc">Accès : France, sans VPN.</span></div>
+    <input id="master" type="password" placeholder="Mot de passe maître" autocomplete="off" />
+    <button id="unlock-btn" class="btn btn-primary block">Déverrouiller</button>
+    <p id="unlock-msg" class="msg"></p>
+    <button id="reimport" class="linkbtn">Réimporter une sauvegarde</button>
+  </section>
+
+  <!-- list -->
+  <section id="list" hidden>
+    <input id="search" type="search" placeholder="Rechercher…" autocomplete="off" />
+    <div id="entries" class="entries"></div>
+    <p id="list-msg" class="msg"></p>
+  </section>
+  <script src="popup.js"></script>
+</body>
+</html>

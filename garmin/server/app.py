@@ -27,11 +27,17 @@ from __future__ import annotations
 
 import base64
 import datetime as _dt
+import hashlib
+import hmac
 import json
 import os
+import secrets
+import smtplib
 import time
+import urllib.request as _urlreq
 import uuid
 from collections import defaultdict
+from email.message import EmailMessage
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -413,3 +419,311 @@ def push_tick(body: TickIn, request: Request) -> dict:
             sub["sent"] = {k for k in seen if k.startswith(today)}
 
     return {"status": "ok", "sent": sent, "subscribers": len(_SUBS)}
+
+
+# --------------------------------------------------------------------------- #
+# Coffre (password vault) — security-event sink.                              #
+#                                                                             #
+# Receives METADATA-ONLY events from the vault (never entry contents / a      #
+# password). Ships each to Elasticsearch for a Kibana dashboard, and sends a  #
+# push alert for the sensitive event types to subscribers who opted in        #
+# (prefs.coffre). Optional shared token deters casual abuse of the endpoint.  #
+# --------------------------------------------------------------------------- #
+
+ES_URL = os.environ.get("ES_URL", "").rstrip("/")
+ES_API_KEY = os.environ.get("ES_API_KEY", "")
+ES_INDEX = os.environ.get("ES_INDEX", "coffre-events")
+COFFRE_TOKEN = os.environ.get("COFFRE_TOKEN", "")
+
+COFFRE_ALERTS = {
+    "access_denied": "Accès refusé (géo/VPN)",
+    "create_denied": "Création refusée (géo/VPN)",
+    "unlock_fail": "Échec de déverrouillage",
+    "self_destruct": "Auto-destruction du coffre",
+    "master_changed": "Mot de passe maître modifié",
+    "wipe": "Coffre effacé",
+    "import": "Coffre importé",
+}
+
+
+class CoffreEventIn(BaseModel):
+    token: str = ""
+    type: str
+    ok: bool = False
+    ts: Optional[int] = None
+    meta: dict = {}
+
+
+def _ship_es(doc: dict) -> None:
+    if not (ES_URL and ES_API_KEY):
+        return
+    try:
+        req = _urlreq.Request(
+            f"{ES_URL}/{ES_INDEX}/_doc",
+            data=json.dumps(doc).encode(),
+            headers={"Content-Type": "application/json", "Authorization": f"ApiKey {ES_API_KEY}"},
+            method="POST",
+        )
+        _urlreq.urlopen(req, timeout=5)  # noqa: S310 — fixed trusted URL
+    except Exception:  # noqa: BLE001 — logging must never break the app
+        pass
+
+
+@app.post("/api/coffre/event")
+def coffre_event(body: CoffreEventIn, request: Request) -> dict:
+    if COFFRE_TOKEN and body.token != COFFRE_TOKEN:
+        raise HTTPException(status_code=401, detail="Bad coffre token.")
+    doc = {
+        "@timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "event": body.type,
+        "ok": bool(body.ok),
+        "meta": body.meta or {},
+        "ip": _client_ip(request),
+    }
+    _ship_es(doc)
+
+    alerted = 0
+    label = COFFRE_ALERTS.get(body.type)
+    if label and _push_enabled():
+        city = (body.meta or {}).get("city") or ""
+        isp = (body.meta or {}).get("isp") or ""
+        detail = " · ".join([x for x in (city, isp) if x])
+        text = label + (f" — {detail}" if detail else "")
+        for _ep, sub in list(_SUBS.items()):
+            if sub.get("prefs", {}).get("coffre"):
+                if _send(sub, "🔐 Alerte Coffre", text, "coffre-alert"):
+                    alerted += 1
+    return {"status": "ok", "alerted": alerted}
+
+
+# --------------------------------------------------------------------------- #
+# Access system — request/approve distribution + email-OTP login.             #
+#                                                                             #
+# Datastore = Elasticsearch (access-requests, access-users). Email = Gmail    #
+# SMTP. Sessions = stateless HMAC-signed tokens. Email-OTP is an ACCESS layer #
+# only; it never touches the vault's zero-knowledge master password.          #
+# --------------------------------------------------------------------------- #
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", "") or SMTP_USER
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
+SITE_URL = os.environ.get("SITE_URL", "https://nathanmartel21.github.io")
+ES_REQ_INDEX = os.environ.get("ES_REQ_INDEX", "access-requests")
+ES_USER_INDEX = os.environ.get("ES_USER_INDEX", "access-users")
+ES_LOG_INDEX = os.environ.get("ES_LOG_INDEX", "access-logs")
+
+# Pending OTP codes (in memory, short-lived): email -> (code, expires, tries).
+_OTP: dict[str, tuple[str, float, int]] = {}
+
+
+def _now_iso() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+
+def _send_email(to: str, subject: str, text: str) -> bool:
+    if not (SMTP_USER and SMTP_PASS):
+        return False
+    try:
+        msg = EmailMessage()
+        msg["From"] = SMTP_FROM
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg.set_content(text)
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as s:
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            s.send_message(msg)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _es(method: str, path: str, body: Optional[dict] = None) -> Optional[dict]:
+    if not (ES_URL and ES_API_KEY):
+        return None
+    try:
+        data = json.dumps(body).encode() if body is not None else None
+        req = _urlreq.Request(f"{ES_URL}{path}", data=data, method=method,
+                              headers={"Content-Type": "application/json",
+                                       "Authorization": f"ApiKey {ES_API_KEY}"})
+        with _urlreq.urlopen(req, timeout=6) as r:  # noqa: S310
+            return json.loads(r.read().decode())
+    except _urlreq.HTTPError as e:
+        try:
+            return json.loads(e.read().decode())
+        except Exception:  # noqa: BLE001
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _audit(event: str, meta: dict) -> None:
+    _es("POST", f"/{ES_LOG_INDEX}/_doc", {"@timestamp": _now_iso(), "event": event, **meta})
+
+
+def _notify_owner(title: str, text: str) -> int:
+    """Push an alert to the owner's device(s) — reuses the coffre-alert opt-in."""
+    if not _push_enabled():
+        return 0
+    n = 0
+    for _ep, sub in list(_SUBS.items()):
+        if sub.get("prefs", {}).get("coffre"):
+            if _send(sub, title, text, "access-alert"):
+                n += 1
+    return n
+
+
+def _sign(payload: dict) -> str:
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    sig = hmac.new(SESSION_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
+
+
+def _verify_token(token: str) -> Optional[dict]:
+    if not SESSION_SECRET or "." not in token:
+        return None
+    try:
+        body, sig = token.split(".", 1)
+        exp = hmac.new(SESSION_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, exp):
+            return None
+        pad = "=" * ((4 - len(body) % 4) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(body + pad))
+        if payload.get("exp", 0) < time.time():
+            return None
+        return payload
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _auth(request: Request) -> Optional[dict]:
+    h = request.headers.get("authorization", "")
+    return _verify_token(h[7:]) if h.startswith("Bearer ") else None
+
+
+def _is_approved(email: str) -> bool:
+    r = _es("GET", f"/{ES_USER_INDEX}/_doc/{email}")
+    return bool(r and r.get("found"))
+
+
+class AccessReqIn(BaseModel):
+    email: str
+    first: str = ""
+    last: str = ""
+    reason: str = ""
+
+
+class EmailIn(BaseModel):
+    email: str
+
+
+class OtpIn(BaseModel):
+    email: str
+    code: str
+
+
+class DecideIn(BaseModel):
+    id: str
+    decision: str
+
+
+@app.post("/api/access/request")
+def access_request(body: AccessReqIn, request: Request) -> dict:
+    _rate_limit(request)
+    email = body.email.strip().lower()
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Email invalide.")
+    rid = uuid.uuid4().hex
+    doc = {"email": email, "first": body.first.strip()[:80], "last": body.last.strip()[:80],
+           "reason": body.reason.strip()[:1000], "status": "pending", "ts": _now_iso(),
+           "ip": _client_ip(request)}
+    _es("PUT", f"/{ES_REQ_INDEX}/_doc/{rid}", doc)
+    _audit("access_request", {"email": email})
+    _notify_owner("🎫 Nouvelle demande d'accès", f"{doc['first']} {doc['last']} <{email}>".strip())
+    if ADMIN_EMAIL:
+        _send_email(ADMIN_EMAIL, "Nouvelle demande d'accès",
+                    f"{doc['first']} {doc['last']} <{email}>\n\nMotif :\n{doc['reason']}\n\n"
+                    f"Approuver/refuser : {SITE_URL}/admin/")
+    return {"status": "ok", "message": "Demande envoyée. Tu recevras un email après validation."}
+
+
+@app.post("/api/auth/request-otp")
+def request_otp(body: EmailIn, request: Request) -> dict:
+    _rate_limit(request)
+    email = body.email.strip().lower()
+    if email == ADMIN_EMAIL or _is_approved(email):
+        code = f"{secrets.randbelow(1000000):06d}"
+        _OTP[email] = (code, time.time() + 600, 0)
+        _send_email(email, "Ton code de connexion",
+                    f"Code de connexion : {code}\n\nValable 10 minutes. Ignore cet email si tu n'es pas à l'origine de la demande.")
+        _audit("otp_sent", {"email": email})
+    # Generic response — never reveal whether an email is approved.
+    return {"status": "ok", "message": "Si cet email est autorisé, un code vient d'être envoyé."}
+
+
+@app.post("/api/auth/verify-otp")
+def verify_otp(body: OtpIn, request: Request) -> dict:
+    email = body.email.strip().lower()
+    rec = _OTP.get(email)
+    if not rec or rec[1] < time.time():
+        raise HTTPException(status_code=401, detail="Code expiré — redemande un code.")
+    code, exp, tries = rec
+    if tries >= 5:
+        _OTP.pop(email, None)
+        raise HTTPException(status_code=429, detail="Trop de tentatives — redemande un code.")
+    if body.code.strip() != code:
+        _OTP[email] = (code, exp, tries + 1)
+        raise HTTPException(status_code=401, detail="Code incorrect.")
+    _OTP.pop(email, None)
+    role = "admin" if email == ADMIN_EMAIL else "user"
+    token = _sign({"email": email, "role": role, "exp": int(time.time() + 7 * 86400)})
+    _audit("login", {"email": email, "role": role, "ip": _client_ip(request)})
+    _notify_owner("🔓 Connexion", f"{email} ({role}) · {_client_ip(request)}")
+    return {"status": "ok", "token": token, "email": email, "role": role}
+
+
+@app.get("/api/me")
+def me(request: Request) -> dict:
+    p = _auth(request)
+    if not p:
+        raise HTTPException(status_code=401, detail="Non connecté.")
+    return {"email": p["email"], "role": p["role"]}
+
+
+@app.get("/api/admin/requests")
+def admin_requests(request: Request) -> dict:
+    p = _auth(request)
+    if not p or p.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Réservé à l'admin.")
+    res = _es("POST", f"/{ES_REQ_INDEX}/_search",
+              {"size": 200, "sort": [{"ts": "desc"}], "query": {"match_all": {}}})
+    hits = [{**h["_source"], "id": h["_id"]} for h in (res.get("hits", {}).get("hits", []) if res else [])]
+    return {"requests": hits}
+
+
+@app.post("/api/admin/decide")
+def admin_decide(body: DecideIn, request: Request) -> dict:
+    p = _auth(request)
+    if not p or p.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Réservé à l'admin.")
+    r = _es("GET", f"/{ES_REQ_INDEX}/_doc/{body.id}")
+    if not r or not r.get("found"):
+        raise HTTPException(status_code=404, detail="Demande introuvable.")
+    src = r["_source"]
+    email = src["email"]
+    status = "approved" if body.decision == "approve" else "denied"
+    src.update({"status": status, "decided_at": _now_iso(), "decided_by": p["email"]})
+    _es("PUT", f"/{ES_REQ_INDEX}/_doc/{body.id}", src)
+    if status == "approved":
+        _es("PUT", f"/{ES_USER_INDEX}/_doc/{email}", {"email": email, "approved_at": _now_iso(), "by": p["email"]})
+        _send_email(email, "Accès approuvé ✅",
+                    f"Bonne nouvelle, ton accès est validé.\nConnecte-toi ici : {SITE_URL}/acces/ (avec cet email, tu recevras un code).")
+    else:
+        _send_email(email, "Demande d'accès refusée",
+                    "Ta demande d'accès n'a pas été retenue pour le moment.")
+    _audit("decision", {"email": email, "status": status, "by": p["email"]})
+    return {"status": "ok", "decision": status}

@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Coffre — remplissage automatique",
+  "version": "1.0.0",
+  "description": "Remplit identifiant + mot de passe depuis ton coffre chiffré (AES-GCM, zero-knowledge).",
+  "default_locale": "fr",
+  "permissions": ["activeTab", "scripting", "storage", "clipboardWrite"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Coffre",
+    "default_icon": { "16": "icon-16.png", "48": "icon-48.png", "128": "icon-128.png" }
+  },
+  "background": { "service_worker": "background.js" },
+  "commands": {
+    "fill-login": {
+      "suggested_key": { "default": "Ctrl+Shift+L", "mac": "Command+Shift+L" },
+      "description": "Remplir l’identifiant et le mot de passe"
+    }
+  },
+  "icons": { "16": "icon-16.png", "48": "icon-48.png", "128": "icon-128.png" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}

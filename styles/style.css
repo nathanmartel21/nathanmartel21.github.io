@@ -616,6 +616,18 @@ a {
 .app-tile-essence:hover { border-color: #12a659; background: linear-gradient(135deg, rgba(18, 166, 89, 0.10) 0%, var(--bg-card) 60%); }
 .app-tile-essence .app-tile-name { color: #12a659; }
 
+.app-tile-coffre .app-tile-icon { background: rgba(124, 108, 246, 0.16); }
+.app-tile-coffre:hover { border-color: #7c6cf6; background: linear-gradient(135deg, rgba(124, 108, 246, 0.10) 0%, var(--bg-card) 60%); }
+.app-tile-coffre .app-tile-name { color: #7c6cf6; }
+
+.app-tile-portail .app-tile-icon { background: rgba(56, 189, 248, 0.16); }
+.app-tile-portail:hover { border-color: #38bdf8; background: linear-gradient(135deg, rgba(56, 189, 248, 0.10) 0%, var(--bg-card) 60%); }
+.app-tile-portail .app-tile-name { color: #38bdf8; }
+
+.app-tile-acces .app-tile-icon { background: rgba(245, 166, 35, 0.16); }
+.app-tile-acces:hover { border-color: #f5a623; background: linear-gradient(135deg, rgba(245, 166, 35, 0.10) 0%, var(--bg-card) 60%); }
+.app-tile-acces .app-tile-name { color: #f5a623; }
+
 /* ------------------------------------------------------------------
    Contact
    ------------------------------------------------------------------ */

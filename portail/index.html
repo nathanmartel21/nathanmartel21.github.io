@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.bigdatacloud.net https://ipwho.is; base-uri 'none'; object-src 'none'" />
+  <title>Portail — Nathan</title>
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Portail" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ===================== Auth ===================== -->
+  <section id="auth" class="screen">
+    <div class="auth-card">
+      <div class="auth-logo">🛰️</div>
+      <h1>Portail</h1>
+      <p id="auth-sub" class="muted">Déverrouille pour accéder à tes applications.</p>
+      <div id="access-note" class="access-note"><span class="dot" id="acc-dot"></span><span id="acc-text">Accès : localisation en France, sans VPN.</span></div>
+      <div class="field"><input id="master" type="password" autocomplete="off" placeholder="Mot de passe maître" aria-label="Mot de passe maître" /></div>
+      <button id="auth-btn" class="btn btn-primary btn-block">Entrer</button>
+      <p id="auth-msg" class="auth-msg" role="alert"></p>
+      <p id="no-vault" class="fineprint muted" hidden>Aucun coffre sur cet appareil — <a href="../coffre/">crée-le d’abord</a> pour protéger le portail.</p>
+    </div>
+  </section>
+
+  <!-- ===================== Hub ===================== -->
+  <section id="hub" class="screen" hidden>
+    <header class="hub-top">
+      <div class="hub-brand"><span>🛰️</span> Portail</div>
+      <button id="lock-btn" class="btn btn-ghost btn-sm" title="Verrouiller">🔒 Verrouiller</button>
+    </header>
+    <main class="hub-body">
+      <p class="hub-hello" id="hub-hello">Tes applications</p>
+      <div class="tiles">
+        <a class="tile tile-garmin" href="../garmin/index.html" target="_blank" rel="noopener">
+          <span class="tile-ic">⌚</span><span class="tile-name">Garmin</span>
+          <span class="tile-desc">Entraînement &amp; récupération</span>
+        </a>
+        <a class="tile tile-essence" href="../essence/index.html" target="_blank" rel="noopener">
+          <span class="tile-ic">⛽</span><span class="tile-name">Essence</span>
+          <span class="tile-desc">Carburant au meilleur prix</span>
+        </a>
+        <a class="tile tile-coffre" href="../coffre/index.html" target="_blank" rel="noopener">
+          <span class="tile-ic">🔐</span><span class="tile-name">Coffre</span>
+          <span class="tile-desc">Mots de passe chiffrés</span>
+        </a>
+      </div>
+    </main>
+    <footer class="hub-foot muted">Session déverrouillée localement · se reverrouille après inactivité.</footer>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

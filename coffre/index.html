@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- Strict CSP: no inline scripts, network limited to the geo/IP checks used by the access gate. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.bigdatacloud.net https://ipwho.is https://ayress21-homemadegarmin.hf.space; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'" />
+  <title>Coffre — mots de passe</title>
+  <meta name="description" content="Coffre-fort de mots de passe chiffré, local et zero-knowledge." />
+  <meta name="theme-color" content="#0d1017" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Coffre" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ===================== Lock / access screen ===================== -->
+  <section id="lock" class="screen">
+    <div class="lock-card">
+      <div class="lock-logo" aria-hidden="true">🔐</div>
+      <h1 id="lock-title">Coffre</h1>
+      <p id="lock-sub" class="muted">Déverrouille ton coffre-fort.</p>
+
+      <div id="access-note" class="access-note">
+        <span class="dot" id="acc-dot"></span>
+        <span id="acc-text">L’accès exige la localisation, en France, sans VPN.</span>
+      </div>
+
+      <div class="field">
+        <input id="master" type="password" inputmode="text" autocomplete="off"
+               placeholder="Mot de passe maître" aria-label="Mot de passe maître" />
+      </div>
+      <div class="field" id="confirm-field" hidden>
+        <input id="master2" type="password" autocomplete="off"
+               placeholder="Confirme le mot de passe" aria-label="Confirmer le mot de passe" />
+      </div>
+      <div id="create-strength" class="strength" hidden><div class="strength-bar"><i></i></div><span></span></div>
+
+      <button id="lock-btn" class="btn btn-primary btn-block">Déverrouiller</button>
+      <p id="lock-msg" class="lock-msg" role="alert"></p>
+      <p class="fineprint muted">Chiffré sur cet appareil (AES-GCM · PBKDF2). Personne d’autre — pas même le serveur — ne peut le lire.</p>
+    </div>
+  </section>
+
+  <!-- ===================== Vault ===================== -->
+  <section id="vault" class="screen" hidden>
+    <header class="vault-top">
+      <div class="vault-search">
+        <input id="search" type="search" placeholder="Rechercher…" aria-label="Rechercher une entrée" autocomplete="off" />
+      </div>
+      <div class="vault-actions">
+        <button id="add-btn" class="btn btn-primary btn-sm" title="Nouvelle entrée">＋ Entrée</button>
+        <button id="settings-btn" class="btn btn-ghost btn-icon" title="Réglages" aria-label="Réglages">⚙️</button>
+        <button id="lock-now-btn" class="btn btn-ghost btn-icon" title="Verrouiller" aria-label="Verrouiller">🔒</button>
+      </div>
+    </header>
+    <main class="vault-body">
+      <div id="entries" class="entries"></div>
+      <div id="empty" class="empty" hidden>
+        <p>🗝️ Ton coffre est vide.</p>
+        <button class="btn btn-primary" id="empty-add">Ajouter ma première entrée</button>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===================== Entry modal ===================== -->
+  <div id="entry-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close="entry"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="entry-modal-title">
+      <div class="modal-head">
+        <h2 id="entry-modal-title">Nouvelle entrée</h2>
+        <button class="btn btn-ghost btn-icon" data-close="entry" aria-label="Fermer">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="lbl">Titre <input id="e-title" type="text" autocomplete="off" placeholder="ex. Gmail" /></label>
+        <label class="lbl">Identifiant / email
+          <span class="input-row">
+            <input id="e-user" type="text" autocomplete="off" placeholder="nom@exemple.com" />
+            <button class="btn btn-ghost btn-sm" id="copy-user-form" type="button" title="Copier">Copier</button>
+          </span>
+        </label>
+        <label class="lbl">Mot de passe
+          <span class="input-row">
+            <input id="e-pass" type="text" autocomplete="off" spellcheck="false" placeholder="mot de passe" />
+            <button class="btn btn-ghost btn-sm" id="gen-toggle" type="button" title="Générer">🎲</button>
+          </span>
+        </label>
+        <div id="e-strength" class="strength"><div class="strength-bar"><i></i></div><span></span></div>
+
+        <div id="gen-panel" class="gen-panel" hidden>
+          <div class="gen-row">
+            <label>Longueur <b id="gen-len-val">20</b></label>
+            <input id="gen-len" type="range" min="8" max="64" value="20" />
+          </div>
+          <div class="gen-classes">
+            <label><input type="checkbox" id="gen-upper" checked /> A-Z</label>
+            <label><input type="checkbox" id="gen-lower" checked /> a-z</label>
+            <label><input type="checkbox" id="gen-digit" checked /> 0-9</label>
+            <label><input type="checkbox" id="gen-sym" checked /> !@#</label>
+            <label><input type="checkbox" id="gen-amb" checked /> éviter ambigus</label>
+          </div>
+          <div class="gen-actions">
+            <button class="btn btn-ghost btn-sm" id="gen-regen" type="button">↻ Regénérer</button>
+            <button class="btn btn-primary btn-sm" id="gen-use" type="button">Utiliser</button>
+          </div>
+        </div>
+
+        <label class="lbl">Site (URL) <input id="e-url" type="url" autocomplete="off" placeholder="https://…" /></label>
+        <label class="lbl">Notes <textarea id="e-notes" rows="3" placeholder="notes (chiffrées)"></textarea></label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-danger btn-sm" id="del-entry" hidden>Supprimer</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" data-close="entry">Annuler</button>
+        <button class="btn btn-primary" id="save-entry">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== Settings modal ===================== -->
+  <div id="settings-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close="settings"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-head">
+        <h2 id="settings-title">Réglages &amp; sécurité</h2>
+        <button class="btn btn-ghost btn-icon" data-close="settings" aria-label="Fermer">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="lbl">Verrouillage auto après inactivité
+          <select id="set-autolock">
+            <option value="60">1 minute</option>
+            <option value="300" selected>5 minutes</option>
+            <option value="900">15 minutes</option>
+          </select>
+        </label>
+        <label class="toggle-row"><span>Auto-destruction du coffre local après trop d’échecs</span>
+          <input type="checkbox" id="set-selfdestruct" /></label>
+        <label class="lbl" id="threshold-row" hidden>Nombre d’échecs avant destruction
+          <input id="set-threshold" type="number" min="3" max="50" value="10" /></label>
+
+        <label class="toggle-row"><span>Alertes de sécurité (notif push + journal serveur/Elastic)<br><small class="muted">Envoie les événements (type, ville, opérateur) au serveur. Jamais un mot de passe.</small></span>
+          <input type="checkbox" id="set-alerts" /></label>
+
+        <div class="sec-block">
+          <h3>Changer le mot de passe maître</h3>
+          <input id="cm-old" type="password" placeholder="Mot de passe actuel" autocomplete="off" />
+          <input id="cm-new" type="password" placeholder="Nouveau mot de passe" autocomplete="off" />
+          <input id="cm-new2" type="password" placeholder="Confirme le nouveau" autocomplete="off" />
+          <button class="btn btn-primary btn-sm" id="cm-btn">Mettre à jour</button>
+        </div>
+
+        <div class="sec-block">
+          <h3>Sauvegarde</h3>
+          <p class="muted small">Exporte le coffre <b>chiffré</b> (illisible sans ton mot de passe). À garder en lieu sûr.</p>
+          <div class="row-btns">
+            <button class="btn btn-ghost btn-sm" id="export-btn">⇩ Exporter (chiffré)</button>
+            <button class="btn btn-ghost btn-sm" id="import-btn">⇧ Importer</button>
+            <input id="import-file" type="file" accept="application/json" hidden />
+          </div>
+        </div>
+
+        <div class="sec-block">
+          <h3>Journal de sécurité (local)</h3>
+          <div id="events" class="events"></div>
+        </div>
+
+        <div class="sec-block danger-block">
+          <h3>Zone dangereuse</h3>
+          <button class="btn btn-danger btn-sm" id="wipe-btn">Effacer définitivement le coffre</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
