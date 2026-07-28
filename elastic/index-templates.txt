@@ -1,0 +1,67 @@
+# OPTIONNEL — améliore juste les types de champs (date, keyword, ip).
+# ⚠️ Sur Bonsai gratuit/Hobby, `_index_template` renvoie 403 "Forbidden action" :
+#    c'est bloqué par leur plan. Dans ce cas, IGNORE ce fichier — les index se
+#    créent tout seuls au premier document (mapping dynamique), l'app marche pareil.
+#    (Alternative si tu veux typer le champ ip : crée l'index à la main, ex.
+#     PUT /coffre-events  { "mappings": { "properties": { "ip": {"type":"ip"} } } }
+#     — si ça renvoie aussi 403, laisse tomber, ce n'est pas nécessaire.)
+#
+# Sinon (Elasticsearch self-host / Elastic Cloud) : à coller dans Dev Tools.
+
+PUT _index_template/access-logs
+{
+  "index_patterns": ["access-logs*"],
+  "template": { "mappings": { "properties": {
+    "@timestamp": { "type": "date" },
+    "event":      { "type": "keyword" },
+    "email":      { "type": "keyword" },
+    "role":       { "type": "keyword" },
+    "status":     { "type": "keyword" },
+    "by":         { "type": "keyword" },
+    "ip":         { "type": "ip" }
+  } } }
+}
+
+PUT _index_template/access-requests
+{
+  "index_patterns": ["access-requests*"],
+  "template": { "mappings": { "properties": {
+    "email":  { "type": "keyword" },
+    "first":  { "type": "keyword" },
+    "last":   { "type": "keyword" },
+    "reason": { "type": "text" },
+    "status": { "type": "keyword" },
+    "ts":     { "type": "date" },
+    "decided_at": { "type": "date" },
+    "decided_by": { "type": "keyword" },
+    "ip":     { "type": "ip" }
+  } } }
+}
+
+PUT _index_template/access-users
+{
+  "index_patterns": ["access-users*"],
+  "template": { "mappings": { "properties": {
+    "email":       { "type": "keyword" },
+    "approved_at": { "type": "date" },
+    "by":          { "type": "keyword" }
+  } } }
+}
+
+PUT _index_template/coffre-events
+{
+  "index_patterns": ["coffre-events*"],
+  "template": { "mappings": { "properties": {
+    "@timestamp": { "type": "date" },
+    "event":      { "type": "keyword" },
+    "ok":         { "type": "boolean" },
+    "ip":         { "type": "ip" },
+    "meta": { "properties": {
+      "city": { "type": "keyword" },
+      "isp":  { "type": "keyword" },
+      "dev":  { "type": "keyword" },
+      "reason": { "type": "text" },
+      "fails": { "type": "integer" }
+    } }
+  } } }
+}

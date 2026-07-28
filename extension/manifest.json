@@ -3,7 +3,6 @@
   "name": "Coffre — remplissage automatique",
   "version": "1.0.0",
   "description": "Remplit identifiant + mot de passe depuis ton coffre chiffré (AES-GCM, zero-knowledge).",
-  "default_locale": "fr",
   "permissions": ["activeTab", "scripting", "storage", "clipboardWrite"],
   "host_permissions": ["<all_urls>"],
   "action": {

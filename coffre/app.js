@@ -458,7 +458,7 @@
     if (!np || np.length < 10) { toast('Nouveau mot de passe : 10 caractères minimum.'); return; }
     if (np !== np2) { toast('La confirmation ne correspond pas.'); return; }
     const blob = readBlob();
-    try { await decryptObj(await deriveKey(oldp, unb64(blob.kdf.salt), blob.kdf.iters), blob.iv, blob.ct); }
+    try { await decryptObj(await deriveKey(oldp, unb64(blob.kdf.salt), blob.kdf.iters || ITERS), blob.iv, blob.ct); }
     catch { toast('Mot de passe actuel incorrect.'); return; }
     const salt = crypto.getRandomValues(new Uint8Array(16));
     sessionKey = await deriveKey(np, salt, ITERS);

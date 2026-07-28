@@ -8,17 +8,21 @@ Pages : `/acces/` (demander l'accès + se connecter + télécharger) · `/admin/
 Endpoints (Space) : `/api/access/request`, `/api/auth/request-otp`, `/api/auth/verify-otp`,
 `/api/me`, `/api/admin/requests`, `/api/admin/decide`.
 
-## 1. Mot de passe d'application Gmail
-1. Compte Google → **Sécurité** → active la **validation en 2 étapes**.
-2. **Mots de passe des applications** → génère-en un (nom : `coffre`) → 16 caractères.
+## 1. Fournisseur email — Brevo (⚠️ PAS de SMTP : Hugging Face bloque les ports SMTP sortants)
+On envoie via l'**API HTTPS** d'un fournisseur. Recommandé : **Brevo** (gratuit 300 mails/jour).
+1. Crée un compte sur **brevo.com**.
+2. **Senders, Domains & Dedicated IPs → Senders** → ajoute un expéditeur (ton email, ex.
+   `moi@gmail.com`) et **valide-le** (Brevo t'envoie un mail de confirmation).
+3. **SMTP & API → API Keys** → crée une clé **API v3** → c'est ta valeur `BREVO_API_KEY`.
+(Alternative : Resend → `RESEND_API_KEY`, mais il faut vérifier un **domaine** pour écrire à d'autres.)
 
 ## 2. Secrets du Space (Settings → Variables and secrets)
 
 | Nom | Valeur |
 |-----|--------|
-| `SMTP_USER` | ton adresse Gmail (ex. `moi@gmail.com`) |
-| `SMTP_PASS` | le mot de passe d'application (16 car.) |
-| `SMTP_FROM` | (option) expéditeur affiché, défaut = `SMTP_USER` |
+| `BREVO_API_KEY` | la clé API v3 de Brevo |
+| `MAIL_FROM` | l'email expéditeur **validé** dans Brevo (ex. `moi@gmail.com`) |
+| `MAIL_FROM_NAME` | (option) nom affiché, ex. `Accès Nathan` |
 | `ADMIN_EMAIL` | **ton** email → tu deviens admin en te connectant avec |
 | `SESSION_SECRET` | chaîne aléatoire longue (`openssl rand -hex 32`) |
 | `SITE_URL` | (option) `https://nathanmartel21.github.io` (liens dans les emails) |

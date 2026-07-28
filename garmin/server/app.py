@@ -432,8 +432,22 @@ def push_tick(body: TickIn, request: Request) -> dict:
 
 ES_URL = os.environ.get("ES_URL", "").rstrip("/")
 ES_API_KEY = os.environ.get("ES_API_KEY", "")
+ES_USER = os.environ.get("ES_USER", "")           # basic-auth alternative (e.g. Bonsai)
+ES_PASS = os.environ.get("ES_PASS", "")
 ES_INDEX = os.environ.get("ES_INDEX", "coffre-events")
 COFFRE_TOKEN = os.environ.get("COFFRE_TOKEN", "")
+
+
+def _es_auth() -> str:
+    if ES_API_KEY:
+        return f"ApiKey {ES_API_KEY}"
+    if ES_USER and ES_PASS:
+        return "Basic " + base64.b64encode(f"{ES_USER}:{ES_PASS}".encode()).decode()
+    return ""
+
+
+def _es_enabled() -> bool:
+    return bool(ES_URL and _es_auth())
 
 COFFRE_ALERTS = {
     "access_denied": "Accès refusé (géo/VPN)",
@@ -455,13 +469,13 @@ class CoffreEventIn(BaseModel):
 
 
 def _ship_es(doc: dict) -> None:
-    if not (ES_URL and ES_API_KEY):
+    if not _es_enabled():
         return
     try:
         req = _urlreq.Request(
             f"{ES_URL}/{ES_INDEX}/_doc",
             data=json.dumps(doc).encode(),
-            headers={"Content-Type": "application/json", "Authorization": f"ApiKey {ES_API_KEY}"},
+            headers={"Content-Type": "application/json", "Authorization": _es_auth()},
             method="POST",
         )
         _urlreq.urlopen(req, timeout=5)  # noqa: S310 — fixed trusted URL
@@ -509,6 +523,11 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASS = os.environ.get("SMTP_PASS", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", "") or SMTP_USER
+# HTTP email APIs (HF Spaces block outbound SMTP — use these over HTTPS instead).
+MAIL_FROM = os.environ.get("MAIL_FROM", "") or SMTP_FROM         # verified sender address
+MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "Accès")
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").strip().lower()
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
 SITE_URL = os.environ.get("SITE_URL", "https://nathanmartel21.github.io")
@@ -519,37 +538,104 @@ ES_LOG_INDEX = os.environ.get("ES_LOG_INDEX", "access-logs")
 # Pending OTP codes (in memory, short-lived): email -> (code, expires, tries).
 _OTP: dict[str, tuple[str, float, int]] = {}
 
+# Per-IP auth lockout: too many wrong codes from one IP → temporary block.
+_AUTH_FAIL: dict[str, dict] = {}
+AUTH_MAX_FAILS = int(os.environ.get("AUTH_MAX_FAILS", "5"))
+AUTH_LOCK = int(os.environ.get("AUTH_LOCK", "900"))   # seconds
+
+
+def _auth_locked(ip: str) -> bool:
+    g = _AUTH_FAIL.get(ip)
+    return bool(g and g.get("until", 0) > time.time())
+
+
+def _auth_fail(ip: str) -> bool:
+    """Record a failed attempt; returns True if this trips the lockout."""
+    g = _AUTH_FAIL.setdefault(ip, {"fails": 0, "until": 0})
+    g["fails"] += 1
+    if g["fails"] >= AUTH_MAX_FAILS:
+        g["until"] = time.time() + AUTH_LOCK
+        g["fails"] = 0
+        return True
+    return False
+
+
+def _auth_clear(ip: str) -> None:
+    _AUTH_FAIL.pop(ip, None)
+
 
 def _now_iso() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
-def _send_email(to: str, subject: str, text: str) -> bool:
-    if not (SMTP_USER and SMTP_PASS):
-        return False
+def _email_provider() -> str:
+    if BREVO_API_KEY:
+        return "brevo"
+    if RESEND_API_KEY:
+        return "resend"
+    if SMTP_USER and SMTP_PASS:
+        return "smtp"
+    return ""
+
+
+def _http_post(url: str, payload: dict, headers: dict, tag: str) -> bool:
     try:
-        msg = EmailMessage()
-        msg["From"] = SMTP_FROM
-        msg["To"] = to
-        msg["Subject"] = subject
-        msg.set_content(text)
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as s:
-            s.starttls()
-            s.login(SMTP_USER, SMTP_PASS)
-            s.send_message(msg)
+        req = _urlreq.Request(url, data=json.dumps(payload).encode(),
+                              headers={"Content-Type": "application/json", **headers}, method="POST")
+        with _urlreq.urlopen(req, timeout=12) as r:
+            r.read()
         return True
-    except Exception:  # noqa: BLE001
+    except _urlreq.HTTPError as e:
+        try:
+            body = e.read().decode()[:300]
+        except Exception:  # noqa: BLE001
+            body = ""
+        print(f"[email] {tag} HTTP {e.code}: {body}", flush=True)
         return False
+    except Exception as e:  # noqa: BLE001
+        print(f"[email] {tag} err: {type(e).__name__}: {e}", flush=True)
+        return False
+
+
+def _send_email(to: str, subject: str, text: str) -> bool:
+    p = _email_provider()
+    if p == "brevo":
+        return _http_post("https://api.brevo.com/v3/smtp/email",
+                          {"sender": {"email": MAIL_FROM, "name": MAIL_FROM_NAME},
+                           "to": [{"email": to}], "subject": subject, "textContent": text},
+                          {"api-key": BREVO_API_KEY, "accept": "application/json"}, "brevo")
+    if p == "resend":
+        return _http_post("https://api.resend.com/emails",
+                          {"from": MAIL_FROM or "onboarding@resend.dev", "to": [to],
+                           "subject": subject, "text": text},
+                          {"Authorization": f"Bearer {RESEND_API_KEY}"}, "resend")
+    if p == "smtp":
+        try:
+            msg = EmailMessage()
+            msg["From"] = MAIL_FROM or SMTP_USER
+            msg["To"] = to
+            msg["Subject"] = subject
+            msg.set_content(text)
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as s:
+                s.starttls()
+                s.login(SMTP_USER, SMTP_PASS)
+                s.send_message(msg)
+            return True
+        except Exception as e:  # noqa: BLE001
+            print(f"[email] smtp err: {type(e).__name__}: {e}", flush=True)
+            return False
+    print("[email] aucun fournisseur configuré (BREVO_API_KEY / RESEND_API_KEY / SMTP).", flush=True)
+    return False
 
 
 def _es(method: str, path: str, body: Optional[dict] = None) -> Optional[dict]:
-    if not (ES_URL and ES_API_KEY):
+    if not _es_enabled():
         return None
     try:
         data = json.dumps(body).encode() if body is not None else None
         req = _urlreq.Request(f"{ES_URL}{path}", data=data, method=method,
                               headers={"Content-Type": "application/json",
-                                       "Authorization": f"ApiKey {ES_API_KEY}"})
+                                       "Authorization": _es_auth()})
         with _urlreq.urlopen(req, timeout=6) as r:  # noqa: S310
             return json.loads(r.read().decode())
     except _urlreq.HTTPError as e:
@@ -667,6 +753,9 @@ def request_otp(body: EmailIn, request: Request) -> dict:
 
 @app.post("/api/auth/verify-otp")
 def verify_otp(body: OtpIn, request: Request) -> dict:
+    ip = _client_ip(request)
+    if _auth_locked(ip):
+        raise HTTPException(status_code=429, detail="Trop de tentatives depuis ton IP — réessaie dans quelques minutes.")
     email = body.email.strip().lower()
     rec = _OTP.get(email)
     if not rec or rec[1] < time.time():
@@ -677,7 +766,11 @@ def verify_otp(body: OtpIn, request: Request) -> dict:
         raise HTTPException(status_code=429, detail="Trop de tentatives — redemande un code.")
     if body.code.strip() != code:
         _OTP[email] = (code, exp, tries + 1)
+        if _auth_fail(ip):
+            _audit("auth_lockout", {"ip": ip, "email": email})
+            _notify_owner("🚫 IP bloquée", f"Trop d'échecs de code depuis {ip}")
         raise HTTPException(status_code=401, detail="Code incorrect.")
+    _auth_clear(ip)
     _OTP.pop(email, None)
     role = "admin" if email == ADMIN_EMAIL else "user"
     token = _sign({"email": email, "role": role, "exp": int(time.time() + 7 * 86400)})
@@ -727,3 +820,19 @@ def admin_decide(body: DecideIn, request: Request) -> dict:
                     "Ta demande d'accès n'a pas été retenue pour le moment.")
     _audit("decision", {"email": email, "status": status, "by": p["email"]})
     return {"status": "ok", "decision": status}
+
+
+class DebugEmailIn(BaseModel):
+    secret: str = ""
+    to: str
+
+
+@app.post("/api/debug/email")
+def debug_email(body: DebugEmailIn) -> dict:
+    """Send a test email via the configured HTTP provider. Protected by CRON_SECRET.
+    Check the Space Logs for the exact error line if ok=false."""
+    if not CRON_SECRET or body.secret != CRON_SECRET:
+        raise HTTPException(status_code=401, detail="Bad secret.")
+    provider = _email_provider() or "aucun"
+    ok = _send_email(body.to, "Test Coffre", "Si tu lis ceci, l'email fonctionne ✅")
+    return {"ok": ok, "provider": provider, "from": MAIL_FROM, "admin": ADMIN_EMAIL}

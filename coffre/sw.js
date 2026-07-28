@@ -2,7 +2,7 @@
    The vault ciphertext lives in localStorage (never touched here); the geo/IP
    access-check calls are cross-origin and never cached. */
 
-const VERSION = 'coffre-v1';
+const VERSION = 'coffre-v2';
 const CORE = `${VERSION}-core`;
 const ASSETS = ['./', './index.html', './app.js', './style.css', './manifest.webmanifest',
   './icon.svg', './icon-192.png', './icon-512.png', './icon-180.png'];
